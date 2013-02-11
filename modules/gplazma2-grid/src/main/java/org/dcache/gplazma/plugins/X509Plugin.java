@@ -1,5 +1,7 @@
 package org.dcache.gplazma.plugins;
 
+import org.globus.gsi.jaas.GlobusPrincipal;
+
 import java.security.Principal;
 import java.security.cert.X509Certificate;
 import java.util.Properties;
@@ -7,8 +9,8 @@ import java.util.Set;
 
 import org.dcache.gplazma.AuthenticationException;
 import org.dcache.gplazma.util.CertificateUtils;
+
 import static org.dcache.gplazma.util.Preconditions.checkAuthentication;
-import org.globus.gsi.gssapi.jaas.GlobusPrincipal;
 
 /**
  * Extracts GlobusPrincipals from any X509Certificate certificate
