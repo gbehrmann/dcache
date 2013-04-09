@@ -23,7 +23,6 @@ import org.ietf.jgss.GSSManager;
 import org.globus.gsi.X509Credential;
 import org.globus.gsi.CredentialException;
 import org.globus.gsi.gssapi.GlobusGSSCredentialImpl;
-import org.globus.gsi.TrustedCertificates;
 import org.gridforum.jgss.ExtendedGSSManager;
 import org.gridforum.jgss.ExtendedGSSContext;
 import org.globus.gsi.GSIConstants;
@@ -39,6 +38,8 @@ import diskCacheV111.util.PermissionDeniedCacheException;
 import java.security.cert.X509Certificate;
 import javax.security.auth.Subject;
 import java.io.IOException;
+import org.dcache.util.Crypto;
+
 /**
  *
  * @author  timur
@@ -128,6 +129,8 @@ public class GsiFtpDoorV1 extends GssFtpDoorV1
                                (ExtendedGSSContext)manager.createContext(cred);
 
         context.setOption(GSSConstants.GSS_MODE, GSIConstants.MODE_GSI);
+        context.setBannedCiphers(Crypto.BANNED_CIPHERS);
+
         return context;
     }
 
