@@ -6,7 +6,6 @@ import org.ietf.jgss.GSSCredential;
 import org.ietf.jgss.GSSException;
 
 import java.io.IOException;
-import java.io.ObjectInputStream;
 import java.io.Serializable;
 import java.net.InetSocketAddress;
 import java.security.PrivateKey;
@@ -37,9 +36,6 @@ public class RemoteGsiftpTransferProtocolInfo implements IpProtocolInfo
     @Deprecated // for compatibility with pools before 1.9.14
     private final Long requestCredentialId;
     private final String user;
-
-    @Deprecated // Must be removed before moving to JGlobus 2
-    private final GSSCredential credential;
 
     private PrivateKey key;
     private X509Certificate[] certChain;
@@ -103,7 +99,6 @@ public class RemoteGsiftpTransferProtocolInfo implements IpProtocolInfo
         this.bufferSize = bufferSize;
         this.tcpBufferSize = tcpBufferSize;
         this.requestCredentialId = requestCredentialId;
-        this.credential = credential;
         this.user = user;
         this.key = credential.getPrivateKey();
         this.certChain = credential.getCertificateChain();
@@ -258,15 +253,5 @@ public class RemoteGsiftpTransferProtocolInfo implements IpProtocolInfo
     public GlobusGSSCredentialImpl getCredential() throws IOException, GSSException {
         return new GlobusGSSCredentialImpl(new X509Credential(key, certChain),
                 GSSCredential.INITIATE_ONLY);
-    }
-
-    private void readObject(ObjectInputStream stream)
-            throws IOException, ClassNotFoundException, GSSException
-    {
-        stream.defaultReadObject();
-        if ((key == null || certChain == null) && credential instanceof GlobusGSSCredentialImpl) {
-            key = ((GlobusGSSCredentialImpl) credential).getPrivateKey();
-            certChain = ((GlobusGSSCredentialImpl) credential).getCertificateChain();
-        }
     }
 }
