@@ -4,34 +4,39 @@
 
 package javatunnel;
 
-import java.io.*;
-import java.util.Iterator;
-
-//jgss
-import javax.security.auth.Subject;
-import org.dcache.auth.FQANPrincipal;
-import org.dcache.gplazma.util.CertificateUtils;
-import org.ietf.jgss.*;
-
-// globus gsi
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.glite.voms.FQAN;
+import org.globus.gsi.CredentialException;
 import org.globus.gsi.GSIConstants;
 import org.globus.gsi.X509Credential;
-import org.globus.gsi.CredentialException;
-import org.globus.gsi.TrustedCertificates;
 import org.globus.gsi.gssapi.GSSConstants;
 import org.globus.gsi.gssapi.GlobusGSSCredentialImpl;
 import org.globus.gsi.gssapi.auth.AuthorizationException;
 import org.globus.gsi.jaas.GlobusPrincipal;
 import org.gridforum.jgss.ExtendedGSSContext;
 import org.gridforum.jgss.ExtendedGSSManager;
+import org.ietf.jgss.GSSCredential;
+import org.ietf.jgss.GSSException;
+import org.ietf.jgss.GSSManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import static org.dcache.util.Files.checkFile;
-import static org.dcache.util.Files.checkDirectory;
+import javax.security.auth.Subject;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.Iterator;
 
 import dmg.util.Args;
+
+import org.dcache.auth.FQANPrincipal;
+import org.dcache.gplazma.util.CertificateUtils;
+
+import static org.dcache.util.Files.checkDirectory;
+import static org.dcache.util.Files.checkFile;
+
+//jgss
+// globus gsi
 
 class GsiTunnel extends GssTunnel  {
 
@@ -79,11 +84,9 @@ class GsiTunnel extends GssTunnel  {
             }
 
             GSSCredential cred = new GlobusGSSCredentialImpl(serviceCredential, GSSCredential.ACCEPT_ONLY);
-            TrustedCertificates trusted_certs = TrustedCertificates.load(service_trusted_certs);
             GSSManager manager = ExtendedGSSManager.getInstance();
             _e_context = (ExtendedGSSContext) manager.createContext(cred);
             _e_context.setOption(GSSConstants.GSS_MODE, GSIConstants.MODE_GSI);
-            _e_context.setOption(GSSConstants.TRUSTED_CERTIFICATES, trusted_certs);
 
             _context = _e_context;
             // do not use channel binding with GSIGSS
