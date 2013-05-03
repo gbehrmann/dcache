@@ -91,7 +91,8 @@ errorpage(static,subject,path,errorcode,errormessage,base) ::= <<
 <html>
  $header()$
     <body>
-     $navi()$
+       <div class="container">
+        $navi()$
         <div id="wrap">
             <div class="content">
                 $title()$
@@ -106,6 +107,7 @@ errorpage(static,subject,path,errorcode,errormessage,base) ::= <<
             </div>
            $footer()$
         </div>
+       </div>
     </body>
 </html>
 >>
@@ -124,9 +126,14 @@ title() ::= <<
 header() ::= <<
     <head>
         <title>dCache.org - File system</title>
-        <link rel="stylesheet" type="text/css" href="$static$/styles/webdav.css"/>
+        <!--link rel="stylesheet" type="text/css" href="$static$/styles/webdav.css"/-->
+        <link href="https://netdna.bootstrapcdn.com/twitter-bootstrap/2.3.1/css/bootstrap-combined.min.css" rel="stylesheet" type="text/css" media="screen">
         <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.6.1/jquery.min.js"></script>
         <script type="text/javascript" src="$static$/tablesorter/jquery.tablesorter.min.js"></script>
+        <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+        <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.10.2/jquery-ui.min.js"></script>
+        <script type="text/javascript" src="https://netdna.bootstrapcdn.com/twitter-bootstrap/2.3.1/js/bootstrap.min.js"></script>
+
         <script type="text/javascript">
         \$(document).ready(function () {
             \$.tablesorter.addParser({
