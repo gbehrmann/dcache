@@ -71,7 +71,7 @@ if [ "${skip}" -eq 0 ]
     then
     if [ ${length} -lt 2 ]
 	then
-	/usr/sbin/srm -copy $*
+	`dirname $0`/../sbin/srm -copy $*
 	exit 1
     else
 	i=0
@@ -170,5 +170,5 @@ if [ "${skip}" -eq 0 ]
 	fi
     fi
 else
-    /usr/sbin/srm -copy $*
+    `dirname $0`/../sbin/srm -copy $*
 fi
