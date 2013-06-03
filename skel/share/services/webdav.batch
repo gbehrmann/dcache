@@ -43,6 +43,8 @@ check webdavInternalAddress
 check webdavIoQueue
 check loginBroker
 
+check webdav.security.ciphers
+
 define env verify-http.exe enddefine
 enddefine
 
@@ -141,4 +143,6 @@ create org.dcache.cells.UniversalSpringCell ${cell.name} \
     -webdav.redirect.on-read=${webdav.redirect.on-read} \
     -webdav.redirect.on-write=${webdav.redirect.on-write} \
     -webdav.overwrite=${webdav.overwrite} \
-    -export -cellClass=WebDAVDoor"
+    -export -cellClass=WebDAVDoor \
+    -webdav.security.ciphers=\"${webdav.security.ciphers}\" \
+    "
