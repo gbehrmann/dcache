@@ -1,6 +1,7 @@
 package org.dcache.services.ssh2;
 
 import com.google.common.base.Charsets;
+import dmg.cells.applets.login.DomainObjectFrame;
 import jline.ANSIBuffer;
 import jline.ConsoleReader;
 import jline.History;
@@ -13,12 +14,9 @@ import org.slf4j.LoggerFactory;
 
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
+import java.io.*;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 
 import diskCacheV111.admin.UserAdminShell;
 
@@ -54,15 +52,30 @@ public class ConsoleReaderCommand implements Command, Runnable {
         "Got interrupt. Please issue \'logoff\' from "
         + "within the Admin Cell to end this session.\n";
     private static File _historyFile;
+    private static final Class<?>[][] COM_SIGNATURE = {
+            { Object.class },
+            { String.class },
+            { String.class, Object.class  },
+            { String.class, String.class  }
+    };
+    private Method[] _commandMethod = new Method[COM_SIGNATURE.length];
+
+    private Object _commandObject;
+
+
     private final UserAdminShell _userAdminShell;
     private OutputStream _err;
     private InputStream _in;
     private ExitCallback _exitCallback;
+    private OutputStream _out;
     private OutputStreamWriter _outWriter;
     private Thread _adminShellThread;
+    private Thread _binaryThread;
     private ConsoleReader _console;
     private History _history;
     private boolean _useColors;
+
+
 
     public ConsoleReaderCommand(String username, CellEndpoint cellEndpoint,
             File historyFile) {
@@ -100,9 +113,18 @@ public class ConsoleReaderCommand implements Command, Runnable {
         _in = in;
     }
 
+    public InputStream getInputStream() {
+        return _in;
+    }
+
     @Override
     public void setOutputStream(OutputStream out) {
+        _out = out;
         _outWriter = new SshOutputStreamWriter(out);
+    }
+
+    public OutputStream getOutputStream() {
+        return _out;
     }
 
     @Override
@@ -168,6 +190,20 @@ public class ConsoleReaderCommand implements Command, Runnable {
             String prompt = new ANSIBuffer().green(_userAdminShell.getPrompt()).toString(_useColors);
             String str = _console.readLine(prompt);
             Object result;
+
+            if (str.equals("$BINARY$")) {
+                _logger.debug("Opening Object Streams");
+                _console.printString(str);
+                _console.printNewline();
+                _console.flushConsole();
+                try {
+                    runBinaryMode();
+                } catch (ClassNotFoundException e) {
+                    e.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
+                }
+                break;
+            }
+
             try {
                 if (str == null) {
                     throw new CommandExitException();
@@ -263,6 +299,23 @@ public class ConsoleReaderCommand implements Command, Runnable {
                     _console.printString(s);
                     _console.printNewline();
                 }
+            }
+        }
+    }
+
+    private void runBinaryMode()
+            throws IOException, ClassNotFoundException
+    {
+        ObjectOutputStream out =
+                new ObjectOutputStream(this.getOutputStream());
+        ObjectInputStream in =
+                new ObjectInputStream(this.getInputStream());
+        Object obj;
+        while ((obj = in.readObject()) != null) {
+            if (obj instanceof DomainObjectFrame) {
+                new BinaryExec(out, (DomainObjectFrame)obj, Thread.currentThread());
+            } else {
+                _logger.error("Won't accept non DomainObjectFrame : " + obj.getClass());
             }
         }
     }
@@ -376,6 +429,84 @@ public class ConsoleReaderCommand implements Command, Runnable {
         public void write(String str, int off, int len) throws IOException {
             for (int i = off; i < (off + len); i++) {
                 write(str.charAt(i));
+            }
+        }
+    }
+
+    private class BinaryExec implements Runnable
+    {
+        private final ObjectOutputStream _out;
+        private final DomainObjectFrame _frame;
+        private final Thread _parent;
+
+        BinaryExec(ObjectOutputStream out,
+                   DomainObjectFrame frame, Thread parent)
+        {
+            _out = out;
+            _frame  = frame;
+            _parent = parent;
+            _binaryThread = new Thread(this);
+            _binaryThread.start();
+        }
+
+        @Override
+        public void run()
+        {
+            Object result;
+            boolean done = false;
+            _logger.debug("Frame id " + _frame.getId() + " arrived");
+            try {
+                if (_frame.getDestination() == null) {
+                    Object [] array  = new Object[1];
+                    array[0] = _frame.getPayload();
+                    if (_commandMethod[0] != null) {
+                        _logger.debug("Choosing executeCommand(Object)");
+                        result = _commandMethod[0].invoke(_commandObject, array);
+                    } else if(_commandMethod[1] != null) {
+                        _logger.debug("Choosing executeCommand(String)");
+                        array[0] = array[0].toString();
+                        result = _commandMethod[1].invoke(_commandObject, array);
+
+                    } else {
+                        throw new
+                                Exception("PANIC : not found : executeCommand(String or Object)");
+                    }
+                } else {
+                    Object [] array  = new Object[2];
+                    array[0] = _frame.getDestination();
+                    array[1] = _frame.getPayload();
+                    if (_commandMethod[2] != null) {
+                        _logger.debug("Choosing executeCommand(String destination, Object)");
+                        result = _commandMethod[2].invoke(_commandObject, array);
+
+                    } else if (_commandMethod[3] != null) {
+                        _logger.debug("Choosing executeCommand(String destination, String)");
+                        array[1] = array[1].toString();
+                        result = _commandMethod[3].invoke(_commandObject, array);
+                    } else {
+                        throw new
+                                Exception("PANIC : not found : "+
+                                "executeCommand(String/String or Object/String)");
+                    }
+                }
+            } catch (InvocationTargetException ite) {
+                result = ite.getTargetException();
+                done = result instanceof CommandExitException;
+            } catch (Exception ae) {
+                result = ae;
+            }
+            _frame.setPayload(result);
+            try {
+                synchronized(_out){
+                    _out.writeObject(_frame);
+                    _out.flush();
+                    _out.reset();  // prevents memory leaks...
+                }
+            } catch (IOException e) {
+                _logger.error("Problem sending result : " + e);
+            }
+            if (done) {
+                _parent.interrupt();
             }
         }
     }
