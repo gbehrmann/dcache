@@ -7,7 +7,7 @@ import com.google.common.collect.ImmutableMap;
 import org.bouncycastle.asn1.ASN1InputStream;
 import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.ASN1Sequence;
-import org.glite.voms.ac.AttributeCertificate;
+import org.bouncycastle.asn1.x509.AttributeCertificate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

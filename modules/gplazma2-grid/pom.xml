@@ -28,10 +28,9 @@
       <artifactId>ssl-proxies</artifactId>
     </dependency>
 
-
     <dependency>
-        <groupId>eu.emi</groupId>
-        <artifactId>vomsjapi</artifactId>
+        <groupId>org.italiangrid</groupId>
+        <artifactId>voms-api-java</artifactId>
     </dependency>
     <dependency>
         <groupId>org.dcache</groupId>
