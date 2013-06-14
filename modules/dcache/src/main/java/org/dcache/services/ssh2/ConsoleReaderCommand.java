@@ -306,14 +306,20 @@ public class ConsoleReaderCommand implements Command, Runnable {
     private void runBinaryMode()
             throws IOException, ClassNotFoundException
     {
+        _logger.debug("Switched to binary mode.");
         ObjectOutputStream out =
                 new ObjectOutputStream(this.getOutputStream());
+        out.flush();
+        _logger.debug("ObjectOutputStream created");
         ObjectInputStream in =
                 new ObjectInputStream(this.getInputStream());
+        _logger.debug("ObjectInputStream created");
         Object obj;
         while ((obj = in.readObject()) != null) {
+            _logger.debug("Reading objects from stream.");
             if (obj instanceof DomainObjectFrame) {
-                new BinaryExec(out, (DomainObjectFrame)obj, Thread.currentThread());
+                _logger.debug("Object is DomainObjectFrame");
+                new BinaryExec(out, (DomainObjectFrame) obj, Thread.currentThread());
             } else {
                 _logger.error("Won't accept non DomainObjectFrame : " + obj.getClass());
             }
@@ -452,6 +458,7 @@ public class ConsoleReaderCommand implements Command, Runnable {
         @Override
         public void run()
         {
+            _logger.debug("Run binary thread.");
             Object result;
             boolean done = false;
             _logger.debug("Frame id " + _frame.getId() + " arrived");
