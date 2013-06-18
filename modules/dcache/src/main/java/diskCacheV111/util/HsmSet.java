@@ -1,12 +1,16 @@
 package diskCacheV111.util ;
 
 import com.google.common.base.Predicate;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
+
+import javax.annotation.PreDestroy;
 
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 
@@ -15,6 +19,8 @@ import dmg.util.Formats;
 
 import org.dcache.cells.CellCommandListener;
 import org.dcache.cells.CellSetupProvider;
+import org.dcache.pool.hsm.NearlineStorage;
+import org.dcache.pool.hsm.NearlineStorageProvider;
 
 import static com.google.common.collect.Iterables.filter;
 import static com.google.common.collect.Iterables.unmodifiableIterable;
@@ -41,7 +47,21 @@ public class HsmSet
     implements CellCommandListener,
                CellSetupProvider
 {
+    private static final ServiceLoader<NearlineStorageProvider> PROVIDERS =
+            ServiceLoader.load(NearlineStorageProvider.class);
+    private static final String DEFAULT_PROVIDER = "external";
+
     private final ConcurrentMap<String, HsmInfo> _hsm = Maps.newConcurrentMap();
+
+    private NearlineStorageProvider findProvider(String name)
+    {
+        for (NearlineStorageProvider provider : PROVIDERS) {
+            if (provider.getName().equals(provider)) {
+                return provider;
+            }
+        }
+        throw new IllegalArgumentException("No such nearline storage provider: " + name);
+    }
 
     /**
      * Information about a particular HSM instance.
@@ -51,6 +71,8 @@ public class HsmSet
         private final String _type;
         private final String _instance;
         private final Map<String,String> _attr = new HashMap<>();
+        private final NearlineStorageProvider _provider;
+        private NearlineStorage _nearlineStorage;
 
         /**
          * Constructs an HsmInfo object.
@@ -58,10 +80,11 @@ public class HsmSet
          * @param instance A unique instance name.
          * @param type     The HSM type, e.g. OSM or enstore.
          */
-        public HsmInfo(String instance, String type)
+        public HsmInfo(String instance, String type, String provider)
         {
             _instance = instance;
             _type = type.toLowerCase();
+            _provider = findProvider(provider);
         }
 
         /**
@@ -98,7 +121,10 @@ public class HsmSet
          */
         public synchronized void unsetAttribute(String attribute)
         {
-           _attr.remove(attribute);
+            _attr.remove(attribute);
+            if (_nearlineStorage != null) {
+                _nearlineStorage.configure(_attr);
+            }
         }
 
         /**
@@ -110,6 +136,9 @@ public class HsmSet
         public synchronized void setAttribute(String attribute, String value)
         {
            _attr.put(attribute, value);
+            if (_nearlineStorage != null) {
+                _nearlineStorage.configure(_attr);
+            }
         }
 
         /**
@@ -118,6 +147,22 @@ public class HsmSet
         public synchronized Iterable<Map.Entry<String, String>> attributes()
         {
             return new ArrayList<>(_attr.entrySet());
+        }
+
+        public synchronized NearlineStorage getNearlineStorage()
+        {
+            if (_nearlineStorage == null) {
+                _nearlineStorage = _provider.createNearlineStorage(_type, _instance);
+                _nearlineStorage.configure(_attr);
+            }
+            return _nearlineStorage;
+        }
+
+        public synchronized void shutdown()
+        {
+            if (_nearlineStorage != null) {
+                _nearlineStorage.shutdown();
+            }
         }
     }
 
@@ -161,35 +206,30 @@ public class HsmSet
                 }));
     }
 
+    public NearlineStorage getNearlineStorageByType(String type)
+    {
+        HsmInfo info = Iterables.getFirst(getHsmInfoByType(type), null);
+        return (info != null) ? info.getNearlineStorage() : null;
+    }
+
     /**
      * Removes any information about the named HSM.
      *
      * @param instance An HSM instance name.
      */
-    public void removeInfo(String instance)
+    private void removeInfo(String instance)
     {
-        _hsm.remove(instance);
-    }
-
-    /**
-     * Returns the HsmInfo about the named HSM. If no such HSM is
-     * known, a new HsmInfo instance is created.
-     *
-     * @param instance An HSM instance name.
-     * @param type     An HSM type.
-     */
-    public HsmInfo createInfo(String instance, String type)
-    {
-        HsmInfo newInfo = new HsmInfo(instance, type);
-        HsmInfo oldInfo = _hsm.putIfAbsent(instance, newInfo);
-        return (oldInfo != null) ? oldInfo : newInfo;
+        HsmInfo info = _hsm.remove(instance);
+        if (info != null) {
+            info.shutdown();
+        }
     }
 
     /**
      * Scans an argument set for options and applies those as
      * attributes to an HsmInfo object.
      */
-    private void _scanOptions(HsmInfo info, Args args)
+    private void scanOptions(HsmInfo info, Args args)
     {
         for (Map.Entry<String,String> e: args.options().entries()) {
             String optName  = e.getKey();
@@ -203,58 +243,75 @@ public class HsmSet
      * Scans an argument set for options and removes and unsets those
      * attributes in the given HsmInfo object.
      */
-    private void _scanOptionsUnset(HsmInfo info, Args args)
+    private void scanOptionsUnset(HsmInfo info, Args args)
     {
         for (String optName: args.options().keySet()) {
             info.unsetAttribute(optName);
         }
     }
 
-    public static final String hh_hsm_set = "<hsmType> [<hsmInstance>] [-<key>=<value>] ... ";
-    public String ac_hsm_set_$_1_2(Args args)
+    public static final String hh_hsm_create = "<type> [<name> [<provider>]] [-<key>=<value>] ...";
+    public String ac_hsm_create_$_1_3(Args args)
     {
-       String type = args.argv(0);
-       String instance = args.argc() == 1 ? type : args.argv(1);
-       HsmInfo info = createInfo(instance, type);
-       _scanOptions(info, args);
-       return "";
+        String type = args.argv(0);
+        String instance = (args.argc() == 1) ? type : args.argv(1);
+        String provider = (args.argc() == 3) ? args.argv(2) : DEFAULT_PROVIDER;
+        HsmInfo info = new HsmInfo(instance, type, provider);
+        scanOptions(info, args);
+        if (_hsm.putIfAbsent(instance, info) != info) {
+            throw new IllegalArgumentException("Nearline storage already exists: " + instance);
+        }
+        return "";
     }
 
-    public static final String hh_hsm_unset = "<hsmInstance> [-<key>] ... ";
+    public static final String hh_hsm_set = "<name> [-<key>=<value>] ...";
+    public String ac_hsm_set_$_1_3(Args args)
+    {
+        String instance = args.argv(0);
+        HsmInfo info = getHsmInfoByName(instance);
+        if (info == null) {
+            throw new IllegalArgumentException("No such nearline storage: " + instance);
+        }
+        scanOptions(info, args);
+        return "";
+    }
+
+    public static final String hh_hsm_unset = "<name> [-<key>] ...";
     public String ac_hsm_unset_$_1(Args args)
     {
        String instance = args.argv(0);
        HsmInfo info = getHsmInfoByName(instance);
        if (info == null) {
-           throw new
-                   IllegalArgumentException("Hsm not found : " + instance);
+           throw new IllegalArgumentException("No such nearline storage: " + instance);
        }
-       _scanOptionsUnset(info, args);
+       scanOptionsUnset(info, args);
        return "";
     }
 
-    public static final String hh_hsm_ls = "[<hsmInstance>] ...";
+    public static final String hh_hsm_ls = "[<name>] ...";
     public String ac_hsm_ls_$_0_99(Args args)
     {
        StringBuilder sb = new StringBuilder();
        if (args.argc() > 0) {
           for (int i = 0; i < args.argc(); i++) {
-             _printInfos(sb, args.argv(i));
+             printInfos(sb, args.argv(i));
           }
        } else {
            for (String name : _hsm.keySet()) {
-               _printInfos(sb, name);
+               printInfos(sb, name);
            }
        }
        return sb.toString();
     }
 
-    public static final String hh_hsm_remove = "<hsmName>";
+    public static final String hh_hsm_remove = "<name>";
     public String ac_hsm_remove_$_1(Args args)
     {
        removeInfo(args.argv(0));
        return "";
     }
+
+    // hsm ls -l
 
     @Override
     public void printSetup(PrintWriter pw)
@@ -279,7 +336,15 @@ public class HsmSet
     @Override
     public void afterSetup() {}
 
-    private void _printInfos(StringBuilder sb, String instance)
+    @PreDestroy
+    public void shutdown()
+    {
+        for (HsmInfo info : _hsm.values()) {
+            info.shutdown();
+        }
+    }
+
+    private void printInfos(StringBuilder sb, String instance)
     {
         assert instance != null;
 
