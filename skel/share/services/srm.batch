@@ -4,9 +4,9 @@
 
 onerror shutdown
 check -strong port
-check listen
-check -strong hostCertificateRefreshPeriod
-check -strong trustAnchorRefreshPeriod
+check srm.net.listen
+check -strong grid.hostcert.refresh
+check -strong grid.ca.refresh
 check -strong srmClientTransport
 check -strong srmHost
 check -strong localSrmHosts
@@ -113,15 +113,16 @@ check -strong srmSizeOfSingleRemoveBatch
 
 check -strong srmUserCredentialsDirectory
 
-check -strong pnfsmanager
-check -strong poolmanager
-check -strong gplazma
+check -strong dcache.service.pnfsmanager
+check -strong dcache.service.poolmanager
+check -strong dcache.service.gplazma
 
-check -strong srm.loginbroker
-check -strong srm.loginbroker.period
-check -strong srm.loginbroker.threshold
-check -strong srm.loginbroker.version
-check -strong srm.loginbroker.family
+check -strong srm.service.loginbroker
+check -strong srm.service.loginbroker.update-period
+check -strong srm.service.loginbroker.update-period.unit
+check -strong srm.service.loginbroker.update-threshold
+check -strong srm.service.loginbroker.version
+check -strong srm.service.loginbroker.family
 
 check -strong srm.lookup.loginbroker
 check -strong srm.lookup.period

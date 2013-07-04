@@ -12,7 +12,7 @@
     <bean id="poolManagerStub" class="org.dcache.cells.CellStub">
         <description>Pool manager cell stub</description>
         <property name="timeout" value="${nfs.poolmanager.timeout}"/>
-        <property name="destination" value="${poolmanager}"/>
+        <property name="destination" value="${dcache.service.poolmanager}"/>
     </bean>
 
     <bean id="pool-stub" class="org.dcache.cells.CellStub">
@@ -22,7 +22,7 @@
 
     <bean id="billing-stub" class="org.dcache.cells.CellStub">
         <description>Billing communication stub</description>
-        <property name="destination" value="${billing}"/>
+        <property name="destination" value="${dcache.service.billing}"/>
     </bean>
 
     <bean id="scheduled-thread-pool"
@@ -70,14 +70,14 @@
         <description>PNFS manager client module</description>
         <constructor-arg>
             <bean class="dmg.cells.nucleus.CellPath">
-                <constructor-arg value="${pnfsmanager}"/>
+                <constructor-arg value="${dcache.service.pnfsmanager}"/>
             </bean>
         </constructor-arg>
     </bean>
 
     <bean id="login-stub" class="org.dcache.cells.CellStub">
         <description>Login cell communication stub</description>
-        <property name="destination" value="${gplazma}"/>
+        <property name="destination" value="${dcache.service.gplazma}"/>
         <property name="timeout" value="${nfs.pool.timeout}"/>
     </bean>
 
@@ -105,15 +105,16 @@
         destroy-method="stop">
         <description>Notifies LoginBroker </description>
         <property name="executor" ref="scheduled-thread-pool"/>
-        <property name="updateTime" value="${loginBrokerUpdateTime}"/>
-        <property name="updateThreshold" value="${loginBrokerUpdateThreshold}"/>
+        <property name="updateTime" value="${nfsv41.service.loginbroker.update-period}"/>
+        <property name="updateTimeUnit" value="${nfsv41.service.loginbroker.update-period.unit}"/>
+        <property name="updateThreshold" value="${nfsv41.service.loginbroker.update-threshold}"/>
         <property name="protocolEngine" value="org.dcache.chimera.nfsv41.door.NFSv41Door"/>
         <property name="protocolVersion" value="nfs4.1"/>
         <property name="protocolFamily" value="${nfs.published.name}"/>
         <property name="port" value="${nfs.port}"/>
         <property name="loginBroker">
             <bean class="dmg.cells.nucleus.CellPath">
-                <constructor-arg value="${loginBroker}"/>
+                <constructor-arg value="${nfsv41.service.loginbroker}"/>
             </bean>
         </property>
     </bean>
