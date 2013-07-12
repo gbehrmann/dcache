@@ -10,10 +10,6 @@ import java.util.Set;
 
 import org.dcache.auth.GidPrincipal;
 import org.dcache.auth.UidPrincipal;
-import org.dcache.auth.UserNamePrincipal;
-import org.dcache.auth.attributes.HomeDirectory;
-import org.dcache.auth.attributes.ReadOnly;
-import org.dcache.auth.attributes.RootDirectory;
 import org.dcache.gplazma.AuthenticationException;
 import org.dcache.gplazma.LoginReply;
 
@@ -40,30 +36,21 @@ public class DoorValidationStrategy  implements ValidationStrategy {
         }
         Set<Principal> principals = getPrincipalsFromLoginReply(loginReply);
         validatePrincipals(principals);
-        Set<Object> attributes = getSessionAttributesFromLoginReply(loginReply);
-        validateAttributes(attributes);
     }
 
     /**
      * checks if authorizedPrincipals set contain at one and only one
      * instance of each type of
-     * {@link UidPrincipal UidPrincipal},
-     * {@link GidPrincipal GidPrincipal} and
-     * {@link UserNamePrincipal UserNamePrincipal}
+     * {@link UidPrincipal UidPrincipal} and
+     * {@link GidPrincipal GidPrincipal}
      * @param principals
      * @throws AuthenticationException if check fails
      */
     private static void validatePrincipals(Set<Principal> principals)
             throws AuthenticationException {
-        boolean hasUserName = false;
         boolean hasUid = false;
         boolean hasPrimaryGid = false;
         for(Principal principal:principals) {
-            if(principal instanceof UserNamePrincipal) {
-                checkAuthentication(!hasUserName, "multiple usernames");
-                hasUserName = true;
-                continue;
-            }
             if(principal instanceof UidPrincipal) {
                 checkAuthentication(!hasUid, "multiple UIDs");
                 hasUid = true;
@@ -78,19 +65,15 @@ public class DoorValidationStrategy  implements ValidationStrategy {
             }
         }
 
-        checkAuthentication(hasUserName && hasUid && hasPrimaryGid,
-                principalsErrorMessage(hasUserName, hasUid, hasPrimaryGid));
+        checkAuthentication(hasUid && hasPrimaryGid,
+                principalsErrorMessage(hasUid, hasPrimaryGid));
     }
 
-
-    private static String principalsErrorMessage(boolean hasUserName,
+    private static String principalsErrorMessage(
             boolean hasUid, boolean hasPrimaryGid)
     {
         StringBuilder errorMessage = new StringBuilder();
 
-        if(!hasUserName) {
-            errorMessage.append("no username");
-        }
         if(!hasUid) {
             appendWithComma(errorMessage, "no UID");
         }
@@ -101,57 +84,6 @@ public class DoorValidationStrategy  implements ValidationStrategy {
         return errorMessage.toString();
     }
 
-    /**
-     * checks if  {@link attributes} has at one and only one of each of
-     * HomeDirectory and RootDirectory
-     * @param attributes
-     * @throws AuthenticationException if check fails
-     */
-    private static void validateAttributes(Set<Object> attributes)
-            throws  AuthenticationException
-    {
-        boolean hasHome = false;
-        boolean hasRoot = false;
-        boolean hasReadOnly = false;
-
-        for(Object attribute:attributes) {
-            if(attribute instanceof HomeDirectory) {
-                checkAuthentication(!hasHome, "multiple home-directories");
-                hasHome = true;
-            }
-            if(attribute instanceof RootDirectory) {
-                checkAuthentication(!hasRoot, "multiple root-directories");
-                hasRoot = true;
-            }
-            if(attribute instanceof ReadOnly) {
-                checkAuthentication(!hasReadOnly,
-                        "multiple read-only declarations");
-                hasReadOnly = true;
-            }
-        }
-
-        checkAuthentication(hasHome && hasRoot && hasReadOnly,
-                attributesErrorMessage(hasHome, hasRoot, hasReadOnly));
-    }
-
-    private static String attributesErrorMessage(boolean hasHome,
-            boolean hasRoot, boolean hasReadOnly)
-    {
-        StringBuilder errorMsg = new StringBuilder();
-
-        if(!hasHome) {
-            errorMsg.append("no home-directory");
-        }
-        if(!hasRoot) {
-            appendWithComma(errorMsg, "no root-directory");
-        }
-        if(!hasReadOnly) {
-            appendWithComma(errorMsg, "no read-only declaration");
-        }
-
-        return errorMsg.toString();
-    }
-
     private static StringBuilder appendWithComma(StringBuilder sb,
             String message)
     {
@@ -160,14 +92,6 @@ public class DoorValidationStrategy  implements ValidationStrategy {
         }
 
         return sb.append(message);
-    }
-
-    private static Set<Object> getSessionAttributesFromLoginReply(LoginReply loginReply)
-            throws AuthenticationException
-    {
-        Set<Object> attributes = loginReply.getSessionAttributes();
-        checkAuthentication(attributes != null, "attributes is null");
-        return attributes;
     }
 
     private static Set<Principal> getPrincipalsFromLoginReply(LoginReply loginReply)

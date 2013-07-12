@@ -17,6 +17,9 @@ check -strong webdav.service.pool.timeout.unit
 check -strong webdav.service.gplazma
 check -strong webdav.service.gplazma.timeout
 check -strong webdav.service.gplazma.timeout.unit
+check -strong webdav.service.gplazma.cache.size
+check -strong webdav.service.gplazma.cache.timeout
+check -strong webdav.service.gplazma.cache.timeout.unit
 check -strong webdav.service.billing
 check -strong webdav.service.loginbroker
 check -strong webdav.service.loginbroker.update-period

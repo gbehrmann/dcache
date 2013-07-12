@@ -85,10 +85,17 @@
   <bean id="login-strategy" class="org.dcache.auth.UnionLoginStrategy">
       <description>Processes login requests</description>
       <property name="loginStrategies">
-	  <list>
-	      <bean class="org.dcache.services.login.RemoteLoginStrategy">
-		  <property name="cellStub" ref="login-stub"/>
-	      </bean>
+      <list>
+        <bean id="login-strategy" class="org.dcache.services.login.CachingLoginStrategy">
+          <constructor-arg>
+            <bean class="org.dcache.services.login.RemoteLoginStrategy">
+              <property name="cellStub" ref="login-stub"/>
+            </bean>
+          </constructor-arg>
+          <constructor-arg value="${webdav.service.gplazma.cache.size}"/>
+          <constructor-arg value="${webdav.service.gplazma.cache.timeout}"/>
+          <constructor-arg value="${webdav.service.gplazma.cache.timeout.unit}"/>
+        </bean>
 	  </list>
       </property>
       <property name="anonymousAccess" value="${webdav.authz.anonymous-operations}"/>
@@ -123,6 +130,7 @@
       <property name="missingFileStrategy" ref="missing-file-strategy"/>
       <property name="listHandler" ref="list-handler"/>
       <property name="executor" ref="scheduled-thread-pool"/>
+      <property name="loginStrategy" ref="login-strategy"/>
       <property name="rootPath" value="${webdav.root}"/>
       <property name="allowedPaths" value="${webdav.authz.allowed-paths}"/>
       <property name="anonymousListing" value="${webdav.authz.anonymous-listing}"/>

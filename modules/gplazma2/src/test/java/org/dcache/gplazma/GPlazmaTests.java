@@ -284,27 +284,6 @@ public class GPlazmaTests {
    }
 
     /**
-     * Configuration is same as in testLogin, but without session
-     * should fail in the check of presence of the home and root attributes
-     * @throws AuthenticationException
-     */
-    @Test (expected=AuthenticationException.class)
-    public void testLoginWithoutSession() throws AuthenticationException {
-        //configuration
-        Configuration config  = newConfiguration (
-            AUTH_CONFIG_ITEM,
-            MAPPING_CONFIG_ITEM,
-            ACCOUNT_CONFIG_ITEM);
-
-        assertFalse(CheckUIDAccountPlugin.isCalled());
-
-        // do the work here
-        LoginReply result = new GPlazma(newLoadStrategy(config), EMPTY_PROPERTIES).login(_inputSubject);
-
-        Assert.assertNotNull(result);
-   }
-
-    /**
      * Configuration is same as in testLogin, but without mapping.
      * @throws AuthenticationException
      */

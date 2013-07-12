@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="
+     http://www.springframework.org/schema/beans
+     http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+  <bean id="properties" class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+    <description>Imported configuration data</description>
+    <property name="location" value="arguments:"/>
+  </bean>
+
+  <bean id="liquibase" class="org.dcache.util.SpringLiquibase">
+    <description>Database schema manager</description>
+    <property name="dataSource">
+      <bean class="org.springframework.jdbc.datasource.DriverManagerDataSource">
+        <property name="driverClassName" value="${db.driver}"/>
+        <property name="url" value="${db.url}"/>
+        <property name="username" value="${db.user}"/>
+        <property name="password" value="#{ T(diskCacheV111.util.Pgpass).getPassword('${db.password.file}', '${db.url}', '${db.user}', '${db.password}') }"/>
+      </bean>
+    </property>
+    <property name="changeLog" value="classpath:${db.schema.changelog}"/>
+    <property name="shouldUpdate" value="${db.schema.auto}"/>
+  </bean>
+
+  <bean id="pmf"
+        class="org.springframework.orm.jdo.LocalPersistenceManagerFactoryBean"
+        depends-on="liquibase">
+    <description>JDO connection</description>
+    <property name="jdoProperties">
+      <props>
+        <prop key="javax.jdo.PersistenceManagerFactoryClass">org.datanucleus.api.jdo.JDOPersistenceManagerFactory</prop>
+        <prop key="javax.jdo.option.ConnectionURL">${db.url}</prop>
+        <prop key="javax.jdo.option.ConnectionUserName">${db.user}</prop>
+        <prop key="javax.jdo.option.ConnectionPassword">${db.password}</prop>
+        <prop key="javax.jdo.option.ConnectionDriverName">${db.driver}</prop>
+        <prop key="datanucleus.PersistenceUnitName">DPM</prop>
+        <prop key="datanucleus.connectionPoolingType">BoneCP</prop>
+        <prop key="datanucleus.cache.level2.type">none</prop>
+        <prop key="datanucleus.validateSchema">true</prop>
+      </props>
+    </property>
+  </bean>
+
+  <bean id="pmfProxy"
+      class="org.springframework.orm.jdo.TransactionAwarePersistenceManagerFactoryProxy">
+    <description>Transaction aware JDO connection</description>
+    <property name="targetPersistenceManagerFactory" ref="pmf"/>
+    <property name="allowCreate" value="false"/>
+  </bean>
+
+  <bean id="dao" class="org.dcache.auth.dpm.JdoDao">
+    <description>Data access object</description>
+    <property name="persistenceManagerFactory" ref="pmfProxy"/>
+  </bean>
+
+  <bean id="txManager" class="org.springframework.orm.jdo.JdoTransactionManager">
+    <description>JDO transaction manager</description>
+    <property name="persistenceManagerFactory" ref="pmf"/>
+  </bean>
+
+  <!--bean id="evicter" class="org.dcache.auth.dpmJdoCacheEvicter"
+        init-method="start" destroy-method="stop">
+    <description>Periodically flushes second level JDO cache</description>
+    <property name="executor" ref="timeout-thread"/>
+    <property name="persistenceManagerFactory" ref="pmf"/>
+    <property name="flushPeriod" value="60000"/>
+  </bean-->
+
+  <bean id="cli" class="org.dcache.auth.dpm.DpmAdministrator">
+    <description>User interface to manipulate mappings</description>
+    <property name="administrationDao" ref="dao"/>
+    <property name="transactionTemplate">
+      <bean class="org.springframework.transaction.support.TransactionTemplate">
+        <property name="transactionManager" ref="txManager"/>
+      </bean>
+    </property>
+  </bean>
+
+  <bean id="man" class="org.dcache.auth.dpm.DpmManual">
+    <description>Manual</description>
+  </bean>
+</beans>

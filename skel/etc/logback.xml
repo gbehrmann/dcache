@@ -74,6 +74,21 @@
     </layout>
   </appender>
 
+  <appender name="auth" class="ch.qos.logback.core.helpers.NOPAppender"/>
+
+  <!--appender name="auth" class="ch.qos.logback.core.FileAppender">
+    <file>/var/log/dcache-auth.log</file>
+    <encoder>
+      <pattern>%d{dd MMM yyyy HH:mm:ss} %X{login.origin} %X{login.type}:%X{login.user} %m%n</pattern>
+    </encoder>
+  </appender-->
+
+  <appender name="auth-pinboard" class="dmg.util.PinboardAppender">
+    <layout>
+      <pattern>%X{login.origin} %X{login.type}:%X{login.user} %m</pattern>
+    </layout>
+  </appender>
+
   <appender name="events" class="ch.qos.logback.core.FileAppender">
     <file>/tmp/events-${domain.name}.out</file>
     <encoder>
@@ -103,6 +118,11 @@
     <appender-ref ref="remote"/>
   </root>
 
+  <logger name="org.dcache.billing.auth" additivity="false">
+    <appender-ref ref="auth"/>
+    <appender-ref ref="auth-pinboard"/>
+  </logger>
+
   <logger name="events" additivity="false">
     <appender-ref ref="events"/>
   </logger>
@@ -115,6 +135,8 @@
     <appender-ref ref="pinboard"/>
     <appender-ref ref="events"/>
     <appender-ref ref="remote"/>
+    <appender-ref ref="auth"/>
+    <appender-ref ref="auth-pinboard"/>
   </logger>
 
   <turboFilter class="dmg.util.logback.CellThresholdFilter">
@@ -184,6 +206,18 @@
       <appender>events</appender>
       <logger>events</logger>
       <level>${dcache.log.level.events}</level>
+    </threshold>
+
+    <threshold>
+      <appender>auth</appender>
+      <logger>org.dcache.billing.auth</logger>
+      <level>info</level>
+    </threshold>
+
+    <threshold>
+      <appender>auth-pinboard</appender>
+      <logger>org.dcache.billing.auth</logger>
+      <level>info</level>
     </threshold>
   </turboFilter>
 </configuration>

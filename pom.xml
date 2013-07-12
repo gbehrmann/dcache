@@ -1102,6 +1102,7 @@
         <module>modules/gplazma2-ldap</module>
         <module>modules/gplazma2-gsi</module>
         <module>modules/gplazma2-htpasswd</module>
+        <module>modules/gplazma2-dpm</module>
         <module>modules/javatunnel</module>
         <module>modules/srm</module>
         <module>modules/dcache</module>

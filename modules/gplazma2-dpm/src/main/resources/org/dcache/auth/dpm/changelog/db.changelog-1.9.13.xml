@@ -1,0 +1,402 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
+
+  <changeSet id="1" author="behrmann">
+    <sql>CREATE SCHEMA DPM</sql>
+    <rollback>DROP SCHEMA DPM</rollback>
+  </changeSet>
+
+  <changeSet id="2" author="behrmann">
+    <createTable schemaName="DPM" tableName="GROUPS">
+      <column name="GID" type="bigint">
+        <constraints primaryKey="true" nullable="false"/>
+      </column>
+      <column name="AUTH" type="varchar(8)">
+        <constraints nullable="false"/>
+      </column>
+    </createTable>
+
+    <createTable schemaName="DPM" tableName="USERS">
+      <column name="UID" type="bigint">
+        <constraints primaryKey="true" nullable="false"/>
+      </column>
+      <column name="AUTH" type="varchar(8)">
+        <constraints nullable="false"/>
+      </column>
+      <column name="GID" type="bigint">
+        <constraints nullable="false"/>
+      </column>
+    </createTable>
+
+    <createTable schemaName="DPM" tableName="USER_GROUPS">
+      <column name="UID" type="bigint">
+        <constraints primaryKey="true" nullable="false"/>
+      </column>
+      <column name="GID" type="bigint">
+        <constraints primaryKey="true" nullable="false"/>
+      </column>
+    </createTable>
+
+    <createTable schemaName="DPM" tableName="ALIAS_CLASSES">
+      <column name="CLASS" type="varchar(256)">
+        <constraints primaryKey="true" nullable="false"/>
+      </column>
+      <column name="CATEGORY" type="varchar(16)">
+        <constraints nullable="false"/>
+      </column>
+      <column name="DISPLAY_NAME" type="varchar(256)">
+        <constraints nullable="false"/>
+      </column>
+      <column name="DEFAULT_AUTHORIZATION" type="varchar(8)">
+        <constraints nullable="false"/>
+      </column>
+      <column name="AUTO_CREATE" type="boolean">
+        <constraints nullable="false"/>
+      </column>
+      <column name="EMBODY" type="boolean">
+        <constraints nullable="false"/>
+      </column>
+      <column name="RANK" type="int">
+        <constraints nullable="false"/>
+      </column>
+      <column name="SHORT_NAME" type="varchar(256)">
+        <constraints nullable="false"/>
+      </column>
+    </createTable>
+
+    <createTable schemaName="DPM" tableName="ALIASES">
+      <column name="CLASS" type="varchar(256)">
+        <constraints primaryKey="true" nullable="false"/>
+      </column>
+      <column name="NAME" type="varchar(256)">
+        <constraints primaryKey="true" nullable="false"/>
+      </column>
+      <column name="CATEGORY" type="varchar(16)">
+        <constraints nullable="false"/>
+      </column>
+      <column name="UID" type="bigint">
+        <constraints nullable="true"/>
+      </column>
+      <column name="GID" type="bigint">
+        <constraints nullable="true"/>
+      </column>
+    </createTable>
+
+    <createTable schemaName="DPM" tableName="ATTRIBUTE_CLASSES">
+      <column name="CLASS" type="varchar(256)">
+        <constraints primaryKey="true" nullable="false"/>
+      </column>
+      <column name="ALLOW_MULTIPLE" type="boolean">
+        <constraints nullable="false"/>
+      </column>
+      <column name="APPLIES_TO_SECONDARY_GROUPS" type="boolean">
+        <constraints nullable="false"/>
+      </column>
+      <column name="DISPLAY_NAME" type="varchar(256)">
+        <constraints nullable="false"/>
+      </column>
+      <column name="SHORT_NAME" type="varchar(256)">
+        <constraints nullable="false"/>
+      </column>
+    </createTable>
+
+    <createTable schemaName="DPM" tableName="GROUP_ATTRIBUTES">
+      <column name="GID" type="bigint">
+        <constraints primaryKey="true" nullable="false"/>
+      </column>
+      <column name="CLASS" type="varchar(256)">
+        <constraints primaryKey="true" nullable="false"/>
+      </column>
+      <column name="VALUE" type="varchar(256)">
+        <constraints primaryKey="true" nullable="false"/>
+      </column>
+    </createTable>
+
+    <createTable schemaName="DPM" tableName="USER_ATTRIBUTES">
+      <column name="UID" type="bigint">
+        <constraints primaryKey="true" nullable="false"/>
+      </column>
+      <column name="CLASS" type="varchar(256)">
+        <constraints primaryKey="true" nullable="false"/>
+      </column>
+      <column name="VALUE" type="varchar(256)">
+        <constraints primaryKey="true" nullable="false"/>
+      </column>
+    </createTable>
+
+    <addForeignKeyConstraint
+            constraintName="USERS_GID_MUST_EXIST"
+            baseTableSchemaName="DPM"
+            baseTableName="USERS"
+            baseColumnNames="GID"
+            referencedTableSchemaName="DPM"
+            referencedTableName="GROUPS"
+            referencedColumnNames="GID"
+            onUpdate="RESTRICT"
+            onDelete="RESTRICT"/>
+
+    <addForeignKeyConstraint
+            constraintName="USER_GROUPS_UID_MUST_EXIST"
+            baseTableSchemaName="DPM"
+            baseTableName="USER_GROUPS"
+            baseColumnNames="UID"
+            referencedTableSchemaName="DPM"
+            referencedTableName="USERS"
+            referencedColumnNames="UID"
+            onUpdate="CASCADE"
+            onDelete="CASCADE"/>
+
+    <addForeignKeyConstraint
+            constraintName="USER_GROUPS_GID_MUST_EXIST"
+            baseTableSchemaName="DPM"
+            baseTableName="USER_GROUPS"
+            baseColumnNames="GID"
+            referencedTableSchemaName="DPM"
+            referencedTableName="GROUPS"
+            referencedColumnNames="GID"
+            onUpdate="RESTRICT"
+            onDelete="RESTRICT"/>
+
+    <addForeignKeyConstraint
+            constraintName="ALIASES_CLASS_MUST_EXIST"
+            baseTableSchemaName="DPM"
+            baseTableName="ALIASES"
+            baseColumnNames="CLASS"
+            referencedTableSchemaName="DPM"
+            referencedTableName="ALIAS_CLASSES"
+            referencedColumnNames="CLASS"
+            onUpdate="RESTRICT"
+            onDelete="RESTRICT"/>
+
+    <!-- The following constraint is redundant because it contains
+         the primary key and thus (class,category) is already
+         unique.  We need the constraint anyway to satisfy the
+         foreign key constraint from the aliases table on those
+         columns.
+    -->
+    <addUniqueConstraint
+            schemaName="DPM"
+            tableName="ALIAS_CLASSES"
+            columnNames="CLASS,CATEGORY"
+            constraintName="ALIAS_CLASSES_UNIQUE_CLASS_CATEGORY"/>
+
+    <addForeignKeyConstraint
+            constraintName="ALIASES_CLASS_AND_CATEGORY_MUST_EXIST"
+            baseTableSchemaName="DPM"
+            baseTableName="ALIASES"
+            baseColumnNames="CLASS,CATEGORY"
+            referencedTableSchemaName="DPM"
+            referencedTableName="ALIAS_CLASSES"
+            referencedColumnNames="CLASS,CATEGORY"
+            onUpdate="RESTRICT"
+            onDelete="RESTRICT"/>
+
+    <addForeignKeyConstraint
+            constraintName="ALIASES_UID_MUST_EXIST"
+            baseTableSchemaName="DPM"
+            baseTableName="ALIASES"
+            baseColumnNames="UID"
+            referencedTableSchemaName="DPM"
+            referencedTableName="USERS"
+            referencedColumnNames="UID"
+            onUpdate="CASCADE"
+            onDelete="CASCADE"/>
+
+    <addForeignKeyConstraint
+            constraintName="ALIASES_GID_MUST_EXIST"
+            baseTableSchemaName="DPM"
+            baseTableName="ALIASES"
+            baseColumnNames="GID"
+            referencedTableSchemaName="DPM"
+            referencedTableName="GROUPS"
+            referencedColumnNames="GID"
+            onUpdate="CASCADE"
+            onDelete="CASCADE"/>
+
+    <addForeignKeyConstraint
+            constraintName="GROUP_ATTRIBUTES_GID_MUST_EXIST"
+            baseTableSchemaName="DPM"
+            baseTableName="GROUP_ATTRIBUTES"
+            baseColumnNames="GID"
+            referencedTableSchemaName="DPM"
+            referencedTableName="GROUPS"
+            referencedColumnNames="GID"
+            onUpdate="CASCADE"
+            onDelete="CASCADE"/>
+
+    <addForeignKeyConstraint
+            constraintName="GROUP_ATTRIBUTES_CLASS_MUST_EXIST"
+            baseTableSchemaName="DPM"
+            baseTableName="GROUP_ATTRIBUTES"
+            baseColumnNames="CLASS"
+            referencedTableSchemaName="DPM"
+            referencedTableName="ATTRIBUTE_CLASSES"
+            referencedColumnNames="CLASS"
+            onUpdate="CASCADE"
+            onDelete="RESTRICT"/>
+
+    <addForeignKeyConstraint
+            constraintName="UID_MUST_EXIST"
+            baseTableSchemaName="DPM"
+            baseTableName="USER_ATTRIBUTES"
+            baseColumnNames="UID"
+            referencedTableSchemaName="DPM"
+            referencedTableName="USERS"
+            referencedColumnNames="UID"
+            onUpdate="CASCADE"
+            onDelete="CASCADE"/>
+
+    <addForeignKeyConstraint
+            constraintName="CLASS_MUST_EXIST"
+            baseTableSchemaName="DPM"
+            baseTableName="USER_ATTRIBUTES"
+            baseColumnNames="CLASS"
+            referencedTableSchemaName="DPM"
+            referencedTableName="ATTRIBUTE_CLASSES"
+            referencedColumnNames="CLASS"
+            onUpdate="CASCADE"
+            onDelete="RESTRICT"/>
+
+    <createIndex schemaName="DPM" tableName="ALIAS_CLASSES"
+                 indexName="IDX_ALIAS_CLASSES_SHORT_NAME"
+                 unique="true">
+      <column name="SHORT_NAME"/>
+    </createIndex>
+
+    <createIndex schemaName="DPM" tableName="ATTRIBUTE_CLASSES"
+                 indexName="IDX_ATTRIBUTE_CLASSES_SHORT_NAME"
+                 unique="true">
+      <column name="SHORT_NAME"/>
+    </createIndex>
+
+    <createIndex schemaName="DPM" tableName="USERS"
+                 indexName="IDX_USERS_GID">
+      <column name="GID"/>
+    </createIndex>
+
+    <createIndex schemaName="DPM" tableName="USER_ATTRIBUTES"
+                 indexName="IDX_USER_ATTRIBUTES_UID">
+      <column name="UID"/>
+    </createIndex>
+
+    <createIndex schemaName="DPM" tableName="USER_ATTRIBUTES"
+                 indexName="IDX_USER_ATTRIBUTES_CLASS">
+      <column name="CLASS"/>
+    </createIndex>
+
+    <createIndex schemaName="DPM" tableName="GROUP_ATTRIBUTES"
+                 indexName="IDX_GROUP_ATTRIBUTES_CLASS">
+      <column name="CLASS"/>
+    </createIndex>
+
+    <createIndex schemaName="DPM" tableName="GROUP_ATTRIBUTES"
+                 indexName="IDX_GROUP_ATTRIBUTES_GID">
+      <column name="GID"/>
+    </createIndex>
+
+    <createIndex schemaName="DPM" tableName="ALIASES"
+                 indexName="IDX_ALIASES_UID">
+      <column name="uid"/>
+    </createIndex>
+
+    <createIndex schemaName="DPM" tableName="ALIASES"
+                 indexName="IDX_ALIASES_GID">
+      <column name="gid"/>
+    </createIndex>
+
+    <createIndex schemaName="DPM" tableName="USER_GROUPS"
+                 indexName="IDX_USER_GROUPS_UID">
+      <column name="uid"/>
+    </createIndex>
+
+    <createIndex schemaName="DPM" tableName="USER_GROUPS"
+                 indexName="IDX_USER_GROUPS_GID">
+      <column name="gid"/>
+    </createIndex>
+
+    <createSequence schemaName="DPM"
+                    sequenceName="UID_SEQUENCE"
+                    startValue="10000" incrementBy="10"/>
+    <createSequence schemaName="DPM"
+                    sequenceName="GID_SEQUENCE"
+                    startValue="10000" incrementBy="10"/>
+  </changeSet>
+
+  <changeSet id="3" author="behrmann" failOnError="false">
+    <insert schemaName="DPM" tableName="ALIAS_CLASSES">
+      <column name="CLASS" value="org.dcache.auth.Origin"/>
+      <column name="CATEGORY" value="UNCLASSIFIED"/>
+      <column name="DISPLAY_NAME" value="Source IP"/>
+      <column name="DEFAULT_AUTHORIZATION" value="UNKNOWN"/>
+      <column name="AUTO_CREATE" valueBoolean="false"/>
+      <column name="EMBODY" valueBoolean="true"/>
+      <column name="RANK" valueNumeric="0"/>
+      <column name="SHORT_NAME" value="ip"/>
+    </insert>
+
+    <insert schemaName="DPM" tableName="ALIAS_CLASSES">
+      <column name="CLASS" value="org.globus.gsi.jaas.GlobusPrincipal"/>
+      <column name="CATEGORY" value="USER"/>
+      <column name="DISPLAY_NAME" value="X.500 Distinguished Name"/>
+      <column name="DEFAULT_AUTHORIZATION" value="UNKNOWN"/>
+      <column name="AUTO_CREATE" valueBoolean="true"/>
+      <column name="EMBODY" valueBoolean="true"/>
+      <column name="RANK" valueNumeric="0"/>
+      <column name="SHORT_NAME" value="dn"/>
+    </insert>
+
+    <insert schemaName="DPM" tableName="ALIAS_CLASSES">
+      <column name="CLASS" value="org.dcache.auth.FQANPrincipal"/>
+      <column name="CATEGORY" value="GROUP"/>
+      <column name="DISPLAY_NAME" value="FQAN"/>
+      <column name="DEFAULT_AUTHORIZATION" value="UNKNOWN"/>
+      <column name="AUTO_CREATE" valueBoolean="true"/>
+      <column name="EMBODY" valueBoolean="true"/>
+      <column name="RANK" valueNumeric="10"/>
+      <column name="SHORT_NAME" value="fqan"/>
+    </insert>
+
+    <insert schemaName="DPM" tableName="ALIAS_CLASSES">
+      <column name="CLASS" value="org.dcache.auth.GroupNamePrincipal"/>
+      <column name="CATEGORY" value="GROUP"/>
+      <column name="DISPLAY_NAME" value="Group name"/>
+      <column name="DEFAULT_AUTHORIZATION" value="UNKNOWN"/>
+      <column name="AUTO_CREATE" valueBoolean="true"/>
+      <column name="EMBODY" valueBoolean="false"/>
+      <column name="RANK" valueNumeric="50"/>
+      <column name="SHORT_NAME" value="group"/>
+    </insert>
+
+    <insert schemaName="DPM" tableName="ALIAS_CLASSES">
+      <column name="CLASS" value="org.dcache.auth.UserNamePrincipal"/>
+      <column name="CATEGORY" value="USER"/>
+      <column name="DISPLAY_NAME" value="User name"/>
+      <column name="DEFAULT_AUTHORIZATION" value="UNKNOWN"/>
+      <column name="AUTO_CREATE" valueBoolean="true"/>
+      <column name="EMBODY" valueBoolean="true"/>
+      <column name="RANK" valueNumeric="50"/>
+      <column name="SHORT_NAME" value="user"/>
+    </insert>
+
+    <insert schemaName="DPM" tableName="ATTRIBUTE_CLASSES">
+      <column name="CLASS" value="org.dcache.auth.attributes.RootDirectory"/>
+      <column name="ALLOW_MULTIPLE" valueBoolean="false"/>
+      <column name="APPLIES_TO_SECONDARY_GROUPS" valueBoolean="false"/>
+      <column name="DISPLAY_NAME" value="Root directory"/>
+      <column name="SHORT_NAME" value="root"/>
+    </insert>
+
+    <insert schemaName="DPM" tableName="ATTRIBUTE_CLASSES">
+      <column name="CLASS" value="org.dcache.auth.attributes.HomeDirectory"/>
+      <column name="ALLOW_MULTIPLE" valueBoolean="false"/>
+      <column name="APPLIES_TO_SECONDARY_GROUPS" valueBoolean="false"/>
+      <column name="DISPLAY_NAME" value="Home directory"/>
+      <column name="SHORT_NAME" value="home"/>
+    </insert>
+
+    <rollback/>
+  </changeSet>
+</databaseChangeLog>

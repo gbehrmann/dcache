@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jdo xmlns="http://java.sun.com/xml/ns/jdo/jdo"
+     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xsi:schemaLocation="http://java.sun.com/xml/ns/jdo/jdo
+        http://java.sun.com/xml/ns/jdo/jdo_2_0.xsd">
+  <package schema="DPM" name="org.dcache.auth.dpm.model">
+    <class name="AliasClass" table="ALIAS_CLASSES">
+      <field name="_className">
+        <column name="CLASS" length="256"/>
+      </field>
+      <field name="_shortName">
+        <column name="SHORT_NAME" length="256"/>
+      </field>
+      <field name="_displayName">
+        <column name="DISPLAY_NAME" length="256"/>
+      </field>
+      <field name="_category">
+        <column name="CATEGORY" length="16"/>
+      </field>
+      <field name="_defaultAuthorization">
+        <column name="DEFAULT_AUTHORIZATION" length="8"/>
+      </field>
+      <field name="_autoCreate" column="AUTO_CREATE"/>
+      <field name="_embodied" column="EMBODY"/>
+      <field name="_rank" column="RANK"/>
+    </class>
+
+    <class name="Alias" table="ALIASES">
+      <inheritance strategy="new-table">
+        <discriminator strategy="value-map" value="ALIAS">
+          <column name="CATEGORY" length="16"/>
+        </discriminator>
+      </inheritance>
+      <field name="_aliasClass">
+        <column name="CLASS" length="256"/>
+      </field>
+      <field name="_name">
+        <column name="NAME" length="256"/>
+      </field>
+    </class>
+
+    <class name="GroupAlias">
+      <inheritance strategy="superclass-table">
+        <discriminator value="GROUP"/>
+      </inheritance>
+      <field name="_group" column="GID"/>
+    </class>
+
+    <class name="UserAlias">
+      <inheritance strategy="superclass-table">
+        <discriminator value="USER"/>
+      </inheritance>
+      <field name="_user" column="UID"/>
+    </class>
+
+    <class name="Group" table="GROUPS">
+      <field name="_gid" column="GID"
+             value-strategy="sequence" sequence="gidseq"/>
+      <field name="_authorization">
+        <column name="AUTH" length="8"/>
+      </field>
+      <field name="_attributes" table="GROUP_ATTRIBUTES">
+        <join>
+          <primary-key>
+            <column name="GID"/>
+            <column name="CLASS"/>
+            <column name="VALUE"/>
+          </primary-key>
+          <column name="GID"/>
+        </join>
+        <element>
+          <embedded>
+            <field name="_attributeClass">
+              <column name="CLASS" length="256"/>
+            </field>
+            <field name="_value">
+              <column name="VALUE" length="256"/>
+            </field>
+          </embedded>
+        </element>
+      </field>
+    </class>
+
+    <class name="User" table="USERS">
+      <field name="_uid" column="UID"
+             value-strategy="sequence" sequence="uidseq"/>
+      <field name="_group" column="GID"/>
+      <field name="_groups" table="USER_GROUPS">
+        <join column="UID"/>
+        <element column="GID"/>
+      </field>
+
+      <field name="_authorization">
+        <column name="AUTH" length="8"/>
+      </field>
+      <field name="_attributes" table="USER_ATTRIBUTES">
+        <join>
+          <primary-key>
+            <column name="UID"/>
+            <column name="CLASS"/>
+            <column name="VALUE"/>
+          </primary-key>
+          <column name="UID"/>
+        </join>
+        <element>
+          <embedded>
+            <field name="_attributeClass">
+              <column name="CLASS" length="256"/>
+            </field>
+            <field name="_value">
+              <column name="VALUE" length="256"/>
+            </field>
+          </embedded>
+        </element>
+      </field>
+    </class>
+
+    <class name="Attribute" embedded-only="true"/>
+
+    <class name="AttributeClass" table="ATTRIBUTE_CLASSES">
+      <field name="_className">
+        <column name="CLASS" length="256"/>
+      </field>
+      <field name="_shortName">
+        <column name="SHORT_NAME" length="256"/>
+      </field>
+      <field name="_displayName">
+        <column name="DISPLAY_NAME" length="256"/>
+      </field>
+      <field name="_appliesToSecondaryGroups"
+             column="APPLIES_TO_SECONDARY_GROUPS"/>
+      <field name="_allowMultiple" column="ALLOW_MULTIPLE"/>
+    </class>
+
+    <sequence name="gidseq" datastore-sequence="GID_SEQUENCE"
+              strategy="noncontiguous">
+        <!-- The following value MUST match the increment value
+             in the LiquiBase changelog. 10 is the default of
+             DataNucleus, but since we have to set it in the schema
+             anyway we make the value explicit in the ORM. -->
+        <extension vendor-name="datanucleus"
+                   key="key-increment-by" value="10"/>
+    </sequence>
+    <sequence name="uidseq" datastore-sequence="UID_SEQUENCE"
+              strategy="noncontiguous">
+        <!-- The following value MUST match the increment value
+             in the LiquiBase changelog. 10 is the default of
+             DataNucleus, but since we have to set it in the schema
+             anyway we make the value explicit in the ORM. -->
+        <extension vendor-name="datanucleus"
+                   key="key-increment-by" value="10"/>
+    </sequence>
+  </package>
+</jdo>

@@ -132,6 +132,11 @@
       <version>${project.version}</version>
     </dependency>
     <dependency>
+      <groupId>org.dcache</groupId>
+      <artifactId>gplazma2-dpm</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
         <groupId>org.dcache</groupId>
         <artifactId>dcache-webadmin</artifactId>
         <version>${project.version}</version>

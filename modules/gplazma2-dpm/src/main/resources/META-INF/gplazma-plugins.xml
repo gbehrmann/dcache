@@ -1,0 +1,6 @@
+<plugins>
+  <plugin>
+    <name>dpm</name>
+    <class>org.dcache.auth.dpm.TransactionalDpmPlugin</class>
+  </plugin>
+</plugins>

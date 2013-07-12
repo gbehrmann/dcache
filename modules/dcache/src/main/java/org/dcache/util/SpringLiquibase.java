@@ -35,6 +35,11 @@ public class SpringLiquibase
     @Override
     public void afterPropertiesSet()
     {
+        run();
+    }
+
+    public void run()
+    {
         getJdbcTemplate().execute(new SchemaMigrator());
     }
 

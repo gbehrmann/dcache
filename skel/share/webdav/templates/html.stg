@@ -36,9 +36,8 @@ file(f) ::= <<
     </td>
     <td>$f.size$</td>
     $endif$
-    <td>
-        $f.mtime$
-    </td>
+    <td>$f.owner$</td>
+    <td>$f.mtime$</td>
 </tr>
 >>
 
@@ -73,6 +72,7 @@ page(static,subject,path,files,base) ::= <<
                             <th></th>
                             <th>Name</th>
                             <th>Size</th>
+                            <th>Owner</th>
                             <th>Last Modified</th>
                         </tr>
                     </thead>

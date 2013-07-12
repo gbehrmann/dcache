@@ -13,6 +13,7 @@ import io.milton.http.Range;
 import io.milton.http.Request;
 import io.milton.http.ResourceFactory;
 import io.milton.resource.Resource;
+import org.globus.gsi.jaas.GlobusPrincipal;
 import org.jboss.netty.handler.codec.http.HttpHeaders;
 import org.jboss.netty.handler.codec.http.HttpResponseStatus;
 import org.slf4j.Logger;
@@ -38,6 +39,7 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.UnknownHostException;
 import java.security.AccessController;
+import java.security.Principal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -69,8 +71,11 @@ import dmg.cells.nucleus.NoRouteToCellException;
 import dmg.cells.services.login.LoginManagerChildrenInfo;
 import dmg.util.Args;
 
+import org.dcache.auth.LoginStrategy;
 import org.dcache.auth.SubjectWrapper;
 import org.dcache.auth.Subjects;
+import org.dcache.auth.UidPrincipal;
+import org.dcache.auth.UserNamePrincipal;
 import org.dcache.cells.AbstractCellComponent;
 import org.dcache.cells.CellCommandListener;
 import org.dcache.cells.CellMessageReceiver;
@@ -166,6 +171,8 @@ public class DcacheResourceFactory
 
     private MissingFileStrategy _missingFileStrategy =
         new AlwaysFailMissingFileStrategy();
+
+    private LoginStrategy _loginStrategy;
 
     public DcacheResourceFactory()
         throws UnknownHostException
@@ -503,6 +510,11 @@ public class DcacheResourceFactory
         return _internalAddress.getHostAddress();
     }
 
+    public void setLoginStrategy(LoginStrategy loginStrategy)
+    {
+        _loginStrategy = loginStrategy;
+    }
+
     @Override
     public void getInfo(PrintWriter pw)
     {
@@ -730,6 +742,35 @@ public class DcacheResourceFactory
         }
     }
 
+    private String getOwner(long uid)
+    {
+        try {
+            Set<Principal> principals =
+                _loginStrategy.reverseMap(new UidPrincipal(uid));
+            String userName = null;
+            String name = null;
+            for (Principal principal: principals) {
+                if (principal instanceof GlobusPrincipal) {
+                    return principal.getName();
+                } else if (principal instanceof UserNamePrincipal) {
+                    userName = principal.getName();
+                } else {
+                    name = principal.getName();
+                }
+            }
+            if (userName != null) {
+                return userName;
+            } else if (name != null) {
+                return name;
+            } else {
+                return String.valueOf(uid);
+            }
+        } catch (CacheException e) {
+            _log.warn("Failed to resolve owner: " + e.getMessage());
+            return "";
+        }
+    }
+
     /**
      * Performs a directory listing returning a list of Resource
      * objects.
@@ -791,7 +832,7 @@ public class DcacheResourceFactory
 
                     @Override
                     public Set<FileAttribute> getRequiredAttributes() {
-                        return EnumSet.of(MODIFICATION_TIME, TYPE, SIZE);
+                        return EnumSet.of(MODIFICATION_TIME, OWNER, TYPE, SIZE);
                     }
 
                     @Override
@@ -800,9 +841,10 @@ public class DcacheResourceFactory
                         Date mtime = new Date(attr.getModificationTime());
                         UrlPathWrapper name =
                                 UrlPathWrapper.forPath(entry.getName());
-                        t.addAggr("files.{name,isDirectory,mtime,size}",
+                        t.addAggr("files.{name,isDirectory,owner,mtime,size}",
                                 name,
                                 attr.getFileType() == DIR,
+                                getOwner(attr.getOwner()),
                                 mtime,
                                 attr.getSize());
                     }
