@@ -61,10 +61,7 @@ public class ConsoleReaderCommand implements Command, Runnable {
     private Method[] _commandMethod = new Method[COM_SIGNATURE.length];
 
     private Object _commandObject;
-
-
     private final UserAdminShell _userAdminShell;
-    private OutputStream _err;
     private InputStream _in;
     private ExitCallback _exitCallback;
     private OutputStream _out;
@@ -100,7 +97,7 @@ public class ConsoleReaderCommand implements Command, Runnable {
 
     @Override
     public void setErrorStream(OutputStream err) {
-        _err = err;
+        // we don't use the error stream
     }
 
     @Override
@@ -143,13 +140,13 @@ public class ConsoleReaderCommand implements Command, Runnable {
         } catch (IOException e) {
             _logger.warn(e.getMessage());
         } finally {
-            _exitCallback.onExit(0);
             try {
                 cleanUp();
             } catch (IOException e) {
-                _logger.warn("Something went wrong cleaning up the console: "
+                _logger.warn("Failed to shutdown console cleanly: "
                         + e.getMessage());
             }
+            _exitCallback.onExit(0);
         }
     }
 
@@ -232,18 +229,12 @@ public class ConsoleReaderCommand implements Command, Runnable {
                         + "support@dcache.org: {}" + e.getMessage());
             } catch (CommandException e) {
                 if (e instanceof CommandPanicException) {
-                    result =
-                        ((CommandPanicException) e)
-                                .getTargetException().getMessage();
                     _logger.warn("Something went wrong during the remote "
                             + "execution of the command: {}"
                             + ((CommandPanicException) e).getTargetException());
                     return;
                 }
                 if (e instanceof CommandThrowableException) {
-                    result =
-                        ((CommandThrowableException) e)
-                                .getTargetException().getMessage();
                     _logger.warn("Something went wrong during the remote "
                             + "execution of the command: {}"
                             + ((CommandThrowableException) e)
@@ -336,7 +327,6 @@ public class ConsoleReaderCommand implements Command, Runnable {
         _console.printString(NL);
         _console.flushConsole();
         _outWriter.close();
-        _in.close();
     }
 
     private static class ConsoleReaderTerminal extends UnixTerminal {

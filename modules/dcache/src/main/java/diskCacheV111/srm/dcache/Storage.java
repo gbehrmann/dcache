@@ -109,6 +109,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 import diskCacheV111.poolManager.CostModule;
@@ -146,18 +147,16 @@ import diskCacheV111.vehicles.transferManager.TransferCompleteMessage;
 import diskCacheV111.vehicles.transferManager.TransferFailedMessage;
 import diskCacheV111.vehicles.transferManager.TransferManagerMessage;
 
-import dmg.cells.nucleus.CellInfo;
 import dmg.cells.nucleus.CellMessage;
 import dmg.cells.nucleus.CellPath;
-import dmg.cells.nucleus.CellVersion;
 import dmg.cells.nucleus.NoRouteToCellException;
 import dmg.cells.services.login.LoginBrokerInfo;
 import dmg.util.Args;
 
 import org.dcache.acl.enums.AccessMask;
 import org.dcache.acl.enums.AccessType;
-import org.dcache.auth.AuthorizationRecord;
 import org.dcache.auth.LoginStrategy;
+import org.dcache.auth.Subjects;
 import org.dcache.auth.persistence.AuthRecordPersistenceManager;
 import org.dcache.cells.AbstractCellComponent;
 import org.dcache.cells.AbstractMessageCallback;
@@ -172,6 +171,7 @@ import org.dcache.namespace.PermissionHandler;
 import org.dcache.namespace.PosixPermissionHandler;
 import org.dcache.pinmanager.PinManagerExtendPinMessage;
 import org.dcache.poolmanager.PoolMonitor;
+import org.dcache.services.login.CachingLoginStrategy;
 import org.dcache.services.login.RemoteLoginStrategy;
 import org.dcache.srm.AbstractStorageElement;
 import org.dcache.srm.AdvisoryDeleteCallbacks;
@@ -403,16 +403,6 @@ public final class Storage
                 "-jdbcUrl, -jdbcDriver, -dbUser and -dbPass/-pgPass";
             _log.error(error);
             throw new IllegalStateException(error);
-        }
-
-        if (config.isGsissl()) {
-            LoginStrategy loginStrategy = new RemoteLoginStrategy(_gplazmaStub);
-
-            DCacheAuthorization authorization =
-                new DCacheAuthorization(loginStrategy,
-                                        (AuthRecordPersistenceManager) config.getSrmUserPersistenceManager());
-            authorization.setCacheLifetime(config.getAuthzCacheLifetime());
-            config.setAuthorization(authorization);
         }
 
         while (_poolMonitor == null) {
@@ -977,7 +967,7 @@ public final class Storage
                         PinCallbacks callbacks)
     {
         try {
-            PinCompanion.pinFile(((AuthorizationRecord)user).toSubject(),
+            PinCompanion.pinFile(((DcacheUser) user).getSubject(),
                                  getPath(surl),
                                  clientHost,
                                  callbacks,
@@ -1002,7 +992,7 @@ public final class Storage
             return;
         }
 
-        UnpinCompanion.unpinFile(((AuthorizationRecord) user).toSubject(),
+        UnpinCompanion.unpinFile(((DcacheUser) user).getSubject(),
                                  new PnfsId(fileId), Long.parseLong(pinId), callbacks,_pinManagerStub);
     }
 
@@ -1011,13 +1001,14 @@ public final class Storage
                                         UnpinCallbacks callbacks,
                                         long srmRequestId)
     {
-        UnpinCompanion.unpinFileBySrmRequestId(((AuthorizationRecord) user).toSubject(), new PnfsId(fileId), srmRequestId, callbacks, _pinManagerStub);
+        UnpinCompanion.unpinFileBySrmRequestId(((DcacheUser) user).getSubject(),
+                new PnfsId(fileId), srmRequestId, callbacks, _pinManagerStub);
     }
 
     @Override
     public void unPinFile(SRMUser user, String fileId, UnpinCallbacks callbacks)
     {
-        UnpinCompanion.unpinFile(((AuthorizationRecord) user).toSubject(),
+        UnpinCompanion.unpinFile(((DcacheUser) user).getSubject(),
                                  new PnfsId(fileId), callbacks, _pinManagerStub);
     }
 
@@ -1185,31 +1176,21 @@ public final class Storage
     }
 
     private boolean verifyUserPathIsRootSubpath(FsPath absolutePath, SRMUser user) {
-
-        if(absolutePath == null) {
+        if (absolutePath == null) {
             return false;
         }
-        String user_root = null;
-        if(user != null) {
-            AuthorizationRecord duser = (AuthorizationRecord) user;
+        FsPath user_root = null;
+        if (user != null) {
+            DcacheUser duser = (DcacheUser) user;
             user_root = duser.getRoot();
-            if(user_root != null) {
-                user_root =new FsPath(user_root).toString();
-            }
         }
-
-
-        if(user_root!= null) {
-            String path = absolutePath.toString();
-            _log.debug("getTurl() user root is "+user_root);
-            if(!path.startsWith(user_root)) {
-                String error = "verifyUserPathIsInTheRoot error:"+
-                        "user's path "+absolutePath+
-                        " is not subpath of the user's root" +user_root;
-                _log.warn(error);
+        if (user_root!= null) {
+            _log.trace("getTurl() user root is {}", user_root);
+            if (!absolutePath.startsWith(user_root)) {
+                _log.warn("verifyUserPathIsInTheRoot error: user's path {} is not subpath of the user's root {}",
+                        absolutePath, user_root);
                 return false;
             }
-
         }
         return true;
     }
@@ -1231,11 +1212,7 @@ public final class Storage
     {
         FsPath userRoot = new FsPath();
         if (user != null) {
-            AuthorizationRecord duser = (AuthorizationRecord) user;
-            String root = duser.getRoot();
-            if (root != null) {
-                userRoot = new FsPath(root);
-            }
+            userRoot = ((DcacheUser) user).getRoot();
         }
 
         if (!verifyUserPathIsRootSubpath(path, user)) {
@@ -1533,7 +1510,7 @@ public final class Storage
     {
         try {
             FsPath actualPnfsPath = getPath(surl);
-            PutCompanion.PrepareToPutFile((AuthorizationRecord) user,
+            PutCompanion.PrepareToPutFile(((DcacheUser) user).getSubject(),
                                           permissionHandler,
                                           actualPnfsPath.toString(),
                                           callbacks,
@@ -1549,9 +1526,8 @@ public final class Storage
     public void setFileMetaData(SRMUser user, FileMetaData fmd)
         throws SRMException
     {
-        AuthorizationRecord duser = (AuthorizationRecord) user;
         PnfsHandler handler =
-            new PnfsHandler(_pnfs, duser.toSubject());
+            new PnfsHandler(_pnfs, ((DcacheUser) user).getSubject());
 
         try {
             if (!(fmd instanceof DcacheFileMetaData)) {
@@ -1585,9 +1561,8 @@ public final class Storage
     {
         _log.debug("getFileMetaData(" + surl + ")");
         FsPath path = getPath(surl);
-        AuthorizationRecord duser = (AuthorizationRecord) user;
         PnfsHandler handler =
-            new PnfsHandler(_pnfs, duser.toSubject());
+            new PnfsHandler(_pnfs, ((DcacheUser) user).getSubject());
         try {
             /* Fetch file attributes.
              */
@@ -1670,7 +1645,6 @@ public final class Storage
         long id = getNextMessageID();
         _log.debug("localCopy for user " + user +
                    "from actualFromFilePath to actualToFilePath");
-        AuthorizationRecord duser = (AuthorizationRecord)user;
         try {
             CopyManagerMessage copyRequest =
                 new CopyManagerMessage(actualFromFilePath.toString(),
@@ -1678,7 +1652,7 @@ public final class Storage
                                        id,
                                        config.getBuffer_size(),
                                        config.getTcp_buffer_size());
-            copyRequest.setSubject(duser.toSubject());
+            copyRequest.setSubject(((DcacheUser) user).getSubject());
             _copyManagerStub.sendAndWait(copyRequest);
         } catch (TimeoutCacheException e) {
             _log.error("CopyManager is unavailable");
@@ -1754,7 +1728,7 @@ public final class Storage
             };
 
         try {
-            RemoveFileCompanion.removeFile((AuthorizationRecord) user,
+            RemoveFileCompanion.removeFile(((DcacheUser) user).getSubject(),
                                            getPath(surl).toString(),
                                            removeFileCallback,
                                            _pnfsStub,
@@ -1772,7 +1746,7 @@ public final class Storage
         _log.debug("Storage.removeFile");
 
         try {
-            RemoveFileCompanion.removeFile((AuthorizationRecord)user,
+            RemoveFileCompanion.removeFile(((DcacheUser) user).getSubject(),
                                            getPath(surl).toString(),
                                            callbacks,
                                            _pnfsStub,
@@ -1810,7 +1784,7 @@ public final class Storage
     {
         _log.debug("Storage.createDirectory");
 
-        Subject subject = ((AuthorizationRecord) user).toSubject();
+        Subject subject = ((DcacheUser) user).getSubject();
         PnfsHandler handler = new PnfsHandler(_pnfs, subject);
 
         try {
@@ -1837,7 +1811,7 @@ public final class Storage
     public void moveEntry(SRMUser user, URI from, URI to)
         throws SRMException
     {
-        Subject subject = ((AuthorizationRecord) user).toSubject();
+        Subject subject = ((DcacheUser) user).getSubject();
         PnfsHandler handler = new PnfsHandler(_pnfs, subject);
         FsPath fromPath = getPath(from);
         FsPath toPath = getPath(to);
@@ -1909,16 +1883,16 @@ public final class Storage
             return false;
         }
 
-        if(user == null || (!(user instanceof AuthorizationRecord))) {
+        if(user == null || (!(user instanceof DcacheUser))) {
             return false;
         }
-        AuthorizationRecord duser = (AuthorizationRecord) user;
+        Subject subject = ((DcacheUser) user).getSubject();
 
-        if(duser.getGid() == gid && Permissions.groupCanRead(permissions)) {
+        if (Subjects.hasGid(subject, gid) && Permissions.groupCanRead(permissions)) {
             return true;
         }
 
-        if(duser.getUid() == uid && Permissions.userCanRead(permissions)) {
+        if (Subjects.hasUid(subject, uid) && Permissions.userCanRead(permissions)) {
             return true;
         }
 
@@ -1946,7 +1920,8 @@ public final class Storage
             return false;
         }
 
-        AuthorizationRecord duser = (AuthorizationRecord) user;
+        DcacheUser duser = (DcacheUser) user;
+        Subject subject = duser.getSubject();
         boolean canWrite;
         if(fileId == null) {
             canWrite = true;
@@ -1961,12 +1936,10 @@ public final class Storage
                canWrite = true;
             } else if(uid == -1 || gid == -1) {
                canWrite = false;
-            } else  if(user == null || (!(user instanceof AuthorizationRecord))) {
-               canWrite = false;
-            } else  if(duser.getGid() == gid &&
+            } else  if(Subjects.hasGid(subject, gid) &&
                     Permissions.groupCanWrite(permissions) ) {
                 canWrite = true;
-            } else  if(duser.getUid() == uid &&
+            } else  if(Subjects.hasUid(subject, uid) &&
                     Permissions.userCanWrite(permissions)) {
                 canWrite = true;
             } else {
@@ -1986,13 +1959,11 @@ public final class Storage
            parentCanWrite = true;
         } else if(parentUid == -1 || parentGid == -1) {
            parentCanWrite = false;
-        } else  if(user == null || (!(user instanceof AuthorizationRecord))) {
-           parentCanWrite = false;
-        } else  if(duser.getGid() == parentGid &&
+        } else  if(Subjects.hasGid(subject, parentGid) &&
                 Permissions.groupCanWrite(parentPermissions) &&
                 Permissions.groupCanExecute(parentPermissions)) {
             parentCanWrite = true;
-        } else  if(duser.getUid() == parentUid &&
+        } else  if(Subjects.hasUid(subject, parentUid) &&
                 Permissions.userCanWrite(parentPermissions) &&
                 Permissions.userCanExecute(parentPermissions)) {
             parentCanWrite = true;
@@ -2143,7 +2114,7 @@ public final class Storage
                                          CopyCallbacks callbacks)
         throws SRMException
     {
-        Subject subject = ((AuthorizationRecord) user).toSubject();
+        Subject subject = ((DcacheUser) user).getSubject();
 
         _log.debug("performRemoteTransfer performing "+(store?"store":"restore"));
         if (!verifyUserPathIsRootSubpath(actualFilePath,user)) {
@@ -2386,8 +2357,7 @@ public final class Storage
     public List<URI> listNonLinkedDirectory(SRMUser user, URI surl)
         throws SRMException
     {
-        AuthorizationRecord duser = (AuthorizationRecord) user;
-        Subject subject = duser.toSubject();
+        Subject subject = ((DcacheUser) user).getSubject();
 
         FsPath path = getPath(surl);
         try {
@@ -2431,7 +2401,7 @@ public final class Storage
         final FsPath path = getPath(surl);
         final List<URI> result = new ArrayList<>();
         final String base = addTrailingSlash(surl.toString());
-        Subject subject = ((AuthorizationRecord) user).toSubject();
+        Subject subject = ((DcacheUser) user).getSubject();
         DirectoryListPrinter printer =
             new DirectoryListPrinter()
             {
@@ -2476,7 +2446,7 @@ public final class Storage
     {
         try {
             FsPath path = getPath(surl);
-            Subject subject = ((AuthorizationRecord) user).toSubject();
+            Subject subject = ((DcacheUser) user).getSubject();
             FmdListPrinter printer =
                 verbose ? new VerboseListPrinter() : new FmdListPrinter();
             _listSource.printDirectory(subject, printer, path, null,
@@ -2639,7 +2609,7 @@ public final class Storage
             SrmReserveSpaceCallbacks callbacks) {
 
         if (_isSpaceManagerEnabled) {
-            SrmReserveSpaceCompanion.reserveSpace((AuthorizationRecord) user,
+            SrmReserveSpaceCompanion.reserveSpace(((DcacheUser) user).getSubject(),
                     sizeInBytes, spaceReservationLifetime, retentionPolicy,
                     accessLatency, description, callbacks, _spaceManagerStub);
         } else {
@@ -2656,7 +2626,7 @@ public final class Storage
             try {
                 long token = Long.parseLong(spaceToken);
 
-                SrmReleaseSpaceCompanion.releaseSpace((AuthorizationRecord) user,
+                SrmReleaseSpaceCompanion.releaseSpace(((DcacheUser) user).getSubject(),
                     token, releaseSizeInBytes, callbacks, _spaceManagerStub);
             } catch(NumberFormatException e){
                 callbacks.ReleaseSpaceFailed("invalid space token="+spaceToken);
@@ -2677,7 +2647,7 @@ public final class Storage
     {
         if (_isSpaceManagerEnabled) {
             try {
-                SrmMarkSpaceAsBeingUsedCompanion.markSpace((AuthorizationRecord) user,
+                SrmMarkSpaceAsBeingUsedCompanion.markSpace(((DcacheUser) user).getSubject(),
                         Long.parseLong(spaceToken), getPath(surl).toString(),
                         sizeInBytes, useLifetime, overwrite, callbacks,
                         _spaceManagerStub);
@@ -2699,7 +2669,7 @@ public final class Storage
     {
         if (_isSpaceManagerEnabled) {
             try {
-                SrmUnmarkSpaceAsBeingUsedCompanion.unmarkSpace((AuthorizationRecord) user,
+                SrmUnmarkSpaceAsBeingUsedCompanion.unmarkSpace(((DcacheUser) user).getSubject(),
                         Long.parseLong(spaceToken), getPath(surl).toString(),
                         callbacks, _spaceManagerStub);
             } catch (SRMInvalidPathException e) {
@@ -2842,10 +2812,9 @@ public final class Storage
     {
         _log.debug("srmGetSpaceTokens ("+description+")");
         guardSpaceManagerEnabled();
-        AuthorizationRecord duser = (AuthorizationRecord) user;
-        GetSpaceTokens getTokens =
-            new GetSpaceTokens(duser,
-                               description);
+        DcacheUser duser = (DcacheUser) user;
+        GetSpaceTokens getTokens = new GetSpaceTokens(description);
+        getTokens.setSubject(duser.getSubject());
         try {
             getTokens = _spaceManagerStub.sendAndWait(getTokens);
         } catch (TimeoutCacheException e) {
@@ -2914,7 +2883,7 @@ public final class Storage
         throws SRMException
     {
         try {
-            Subject subject = ((AuthorizationRecord) user).toSubject();
+            Subject subject = ((DcacheUser) user).getSubject();
             FsPath path = getPath(surl);
             PnfsHandler handler = new PnfsHandler(_pnfs, subject);
             handler.getFileAttributes(path.toString(),
@@ -3008,7 +2977,7 @@ public final class Storage
             attributes.setPnfsId(pnfsId);
             PinManagerExtendPinMessage extendLifetime =
                 new PinManagerExtendPinMessage(attributes, Long.parseLong(pinId), newPinLifetime);
-            extendLifetime.setSubject(((AuthorizationRecord) user).toSubject());
+            extendLifetime.setSubject(((DcacheUser) user).getSubject());
             extendLifetime = _pinManagerStub.sendAndWait(extendLifetime);
             return extendLifetime.getLifetime();
         } catch (IllegalArgumentException e) {

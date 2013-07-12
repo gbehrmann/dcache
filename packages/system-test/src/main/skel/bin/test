@@ -6,6 +6,7 @@ require 'ostruct'
 require 'fileutils'
 require 'tempfile'
 require 'ansi'
+require 'etc'
 
 include ANSI::Code
 
@@ -17,10 +18,12 @@ include ANSI::Code
 @srmmkdir = 'srmmkdir'
 @srmrmdir = 'srmrmdir'
 @srmcheck = 'srm-check-permissions'
-@ngcp = 'arccp'
-@ngls = 'arcls'
+@arccp = 'arccp'
+@arcrm = 'arcrm'
+@arcls = 'arcls'
 @xrdcp = 'xrdcp'
 @dccp = 'dccp'
+@curl = 'curl'
 
 @unique = Time.now.to_i
 @count = 0
@@ -109,22 +112,24 @@ def arc(source, dest, *args)
   tmp3 = makeTempName
   tmp4 = makeTempName
 
-  run(@ngcp, '-p', args,
+  run(@arccp, '-p', args,
       "#{source}",
       "srm://#{@options.host}:8443/#{@options.dir}/#{tmp1}")
-  run(@ngcp, args,
+  run(@arccp, args,
       "gsiftp://#{@options.host}/#{@options.dir}/#{tmp1}",
       "srm://#{@options.host}:8443/#{@options.dir}/#{tmp2}")
-  run(@ngcp, args,
+  run(@arccp, args,
       "srm://#{@options.host}:8443/#{@options.dir}/#{tmp2}",
       "gsiftp://#{@options.host}/#{@options.dir}/#{tmp3}")
-  run(@ngcp, args,
+  run(@arccp, args,
       "srm://#{@options.host}:8443/#{@options.dir}/#{tmp3}",
       "srm://#{@options.host}:8443/#{@options.dir}/#{tmp4}")
-  run(@ngcp, '-p', args,
+  run(@arccp, '-p', args,
       "srm://#{@options.host}:8443/#{@options.dir}/#{tmp4}",
       "#{dest}")
-  run(@ngls,
+  run(@arcls,
+      "srm://#{@options.host}:8443/#{@options.dir}/#{tmp1}")
+  run(@arcrm,
       "srm://#{@options.host}:8443/#{@options.dir}/#{tmp1}")
 end
 
@@ -159,6 +164,13 @@ def gsidcap(source, dest, *args)
   run(@dccp, args,
       "gsidcap://#{@options.host}:22128/#{@options.dir}/#{tmp1}",
       "#{dest}")
+end
+
+def http(source, dest, *args)
+  tmp1 = makeTempName
+  run(@curl, args, "-s", "-u", "#{Etc.getlogin}:password", "-L", "-T", source, "http://#{@options.host}:2880/#{@options.dir}/#{tmp1}")
+  run(@curl, args, "-s", "-L", "-o", dest, "http://#{@options.host}:2880/#{@options.dir}/#{tmp1}")
+  run(@curl, args, "-u", "#{Etc.getlogin}:password", "-X", "DELETE", "http://#{@options.host}:2880/#{@options.dir}/#{tmp1}")
 end
 
 def test(transfer, *args)
@@ -205,7 +217,8 @@ def OptionParser.parse(args)
     :srmcp => [ [ :srmcp, '-1' ],
                 [ :srmcp, '-2' ]
               ],
-    :arc => [ [ :arc ] ]
+    :arc => [ [ :arc ] ],
+    :http => [ [ :http ] ]
   }
 
   parser = OptionParser.new do |opts|
@@ -249,6 +262,10 @@ def OptionParser.parse(args)
 
     opts.on("--[no-]arc", "Test ARC client") do |value|
       (value ? options.includes : options.excludes ) << :arc
+    end
+
+    opts.on("--[no-]http", "Test HTTP") do |value|
+      (value ? options.includes : options.excludes ) << :http
     end
 
     opts.on("-h", "--help", "Show this message") do |value|

@@ -137,10 +137,10 @@ public class RrdPoolInfoAgent implements Runnable {
         try {
             processPools();
         } catch (InterruptedException t) {
-            logger.error("collectPoolSeclectionUnit interrupted", t);
+            logger.error("pool queue plot update interrupted ...");
             return;
         } catch (Exception t) {
-            logger.error("problem running collectPoolSeclectionUnit", t);
+            logger.error("problem updating pool queue plots: {}", t.getMessage());
             return;
         }
 
@@ -149,7 +149,8 @@ public class RrdPoolInfoAgent implements Runnable {
                 new RrdGraph(getGraphDef(pool.getName()));
                 logger.debug("created plot for {}", pool.getName());
             } catch (Exception t) {
-                logger.error("could not create plot for {}", pool.getName(), t);
+                logger.error("problem during plot creation for {}: {}",
+                                pool.getName(), t.getMessage());
                 return;
             }
         }
@@ -158,7 +159,8 @@ public class RrdPoolInfoAgent implements Runnable {
             new RrdGraph(getGraphDef(ALL_POOLS));
             logger.debug("created plot for {}", ALL_POOLS);
         } catch (Exception t) {
-            logger.error("could not create plot for {}", ALL_POOLS, t);
+            logger.error("problem during plot creation for {}: {}",
+                            ALL_POOLS, t.getMessage());
         }
     }
 
@@ -311,32 +313,35 @@ public class RrdPoolInfoAgent implements Runnable {
         try {
             rrdDb = getDatabase(pool, false);
         } catch (IOException t) {
-            logger.error("could not open RrdDb file for {}", pool, t);
+            logger.error("could not open RrdDb file for {}: {}",
+                            pool, t.getMessage());
             return;
         }
 
         try {
-            Sample sample = rrdDb.createSample();
-            sample.setTime(now);
-            Map<String, Double> values = data.data();
+            if (now - rrdDb.getLastUpdateTime() >= 1) {
+                Sample sample = rrdDb.createSample();
+                sample.setTime(now);
+                Map<String, Double> values = data.data();
 
-            for (RrdHistogram h : RrdHistogram.values()) {
-                sample.setValue(RrdHistogram.getSourceName(h),
-                                values.get(h.toString()));
+                for (RrdHistogram h : RrdHistogram.values()) {
+                    sample.setValue(RrdHistogram.getSourceName(h),
+                                    values.get(h.toString()));
+                }
+
+                logger.debug("{}\t{}", new Date(TimeUnit.SECONDS.toMillis(now)),
+                                sample.dump());
+
+                sample.update();
+                logger.debug(rrdDb.dump());
             }
-
-            logger.debug("{}\t{}", new Date(TimeUnit.SECONDS.toMillis(now)),
-                            sample.dump());
-
-            sample.update();
-            logger.debug(rrdDb.dump());
         } catch (IOException t) {
-            logger.error("problem writing data to RrdDb", t);
+            logger.error("problem writing data to RrdDb: {}", t.getMessage());
         } finally {
             try {
                 rrdDb.close();
             } catch (IOException t) {
-                logger.error("problem closing RrdDb", t);
+                logger.error("problem closing RrdDb: {}", t.getMessage());
             }
         }
     }
