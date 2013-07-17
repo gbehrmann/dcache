@@ -189,7 +189,7 @@ public class ConsoleReaderCommand implements Command, Runnable {
             Object result;
 
             if (str.equals("$BINARY$")) {
-                _logger.debug("Opening Object Streams");
+                _logger.debug("Received Binary");
                 _console.printString(str);
                 _console.printNewline();
                 _console.flushConsole();
@@ -300,7 +300,6 @@ public class ConsoleReaderCommand implements Command, Runnable {
         _logger.debug("Switched to binary mode.");
         ObjectOutputStream out =
                 new ObjectOutputStream(this.getOutputStream());
-        out.flush();
         _logger.debug("ObjectOutputStream created");
         ObjectInputStream in =
                 new ObjectInputStream(this.getInputStream());
