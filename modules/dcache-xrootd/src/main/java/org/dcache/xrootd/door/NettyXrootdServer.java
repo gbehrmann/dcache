@@ -151,7 +151,7 @@ public class NettyXrootdServer
                     if (_log.isDebugEnabled()) {
                         pipeline.addLast("logger", new LoggingHandler(NettyXrootdServer.class));
                     }
-                    pipeline.addLast("handshake", new XrootdHandshakeHandler(XrootdProtocol.LOAD_BALANCER));
+                    pipeline.addLast("handshake", new XrootdHandshakeHandler(XrootdProtocol.DATA_SERVER));
                     pipeline.addLast("executor", new ExecutionHandler(_requestExecutor));
                     for (ChannelHandlerFactory factory: _channelHandlerFactories) {
                         pipeline.addLast("plugin:" + factory.getName(), factory.createHandler());
