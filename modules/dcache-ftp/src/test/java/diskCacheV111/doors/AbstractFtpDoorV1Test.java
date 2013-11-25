@@ -1,7 +1,3 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
 package diskCacheV111.doors;
 
 import org.junit.After;
@@ -14,7 +10,12 @@ import org.junit.runners.model.Statement;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.slf4j.Logger;
 
+import java.net.Inet4Address;
+import java.net.Inet6Address;
+import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
 import java.util.EnumSet;
 
 import diskCacheV111.util.CacheException;
@@ -28,14 +29,17 @@ import diskCacheV111.util.PnfsHandler;
 import diskCacheV111.util.PnfsId;
 import diskCacheV111.util.TimeoutCacheException;
 
-import org.dcache.namespace.FileType;
+import dmg.util.StreamEngine;
 
-import static org.junit.Assert.assertEquals;
+import org.dcache.namespace.FileType;
+import org.dcache.util.PortRange;
+
+import static com.google.common.net.InetAddresses.forString;
+import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
-/**
- *
- * @author karsten
- */
+
+@SuppressWarnings("unchecked")
 public class AbstractFtpDoorV1Test {
 
     private static final String NEW_DIR = "newdir";
@@ -44,8 +48,14 @@ public class AbstractFtpDoorV1Test {
     private static final String DST_FILE = "target";
     private static final String INVALID_FILE = "invalid";
 
-    @Mock AbstractFtpDoorV1 door;
-    @Mock PnfsHandler pnfs;
+    @Mock
+    AbstractFtpDoorV1 door;
+    @Mock
+    PnfsHandler pnfs;
+    @Mock
+    Logger logger;
+    @Mock
+    StreamEngine streamEngine;
 
     @Before
     public void setUp()
@@ -54,6 +64,7 @@ public class AbstractFtpDoorV1Test {
         door._pathRoot = new FsPath("pathRoot");
         door._cwd = "/cwd";
         door._pnfs = pnfs;
+        door._engine = streamEngine;
     }
 
     @After
@@ -80,9 +91,13 @@ public class AbstractFtpDoorV1Test {
                 public void evaluate() throws Throwable {
                     try {
                         stmnt.evaluate();
+                        if (checkCode)
+                            fail("Expected FTPCommandException '"+_code+"' not thrown.");
                     } catch (FTPCommandException commandException) {
                         if (checkCode) {
-                            assertEquals(_code, commandException.getCode());
+                            assertEquals("Unexpected reply '"+commandException.getCode()+" "+commandException.getReply()+"'", _code, commandException.getCode());
+                        } else {
+                            fail("Caught unexpected exception FTPCommandException '" + _code + "':'"+commandException.getMessage()+"'.");
                         }
                     }
                 }
@@ -110,7 +125,7 @@ public class AbstractFtpDoorV1Test {
     public void whenRnfrIsCalledForNonExistingFilenameReplyFileNotFound550()
             throws FTPCommandException, CacheException {
         doCallRealMethod().when(door).ac_rnfr(anyString());
-        when(pnfs.getPnfsIdByPath("/pathRoot/cwd/"+INVALID_FILE)).thenThrow(CacheException.class);
+        when(pnfs.getPnfsIdByPath("/pathRoot/cwd/" + INVALID_FILE)).thenThrow(CacheException.class);
 
         thrown.expectCode(550);
         door.ac_rnfr(INVALID_FILE);
@@ -132,7 +147,7 @@ public class AbstractFtpDoorV1Test {
     public void whenRntoIsCalledWithoutPreviousRnfrReplyError503()
             throws FTPCommandException, CacheException {
         doCallRealMethod().when(door).ac_rnto(anyString());
-        when(pnfs.getPnfsIdByPath("/pathRoot/cwd/"+DST_FILE)).thenThrow(CacheException.class);
+        when(pnfs.getPnfsIdByPath("/pathRoot/cwd/" + DST_FILE)).thenThrow(CacheException.class);
 
         thrown.expectCode(503);
         door.ac_rnto(DST_FILE);
@@ -152,10 +167,235 @@ public class AbstractFtpDoorV1Test {
     }
 
     @Test
+    public void EPRTshouldReply200ForValidIP4Arg()
+            throws FTPCommandException {
+            doCallRealMethod().when(door).ac_eprt(anyString());
+            doCallRealMethod().when(door).getExtendedAddressOf(anyString());
+            doCallRealMethod().when(door).ok(anyString());
+
+            door.ac_eprt("|1|127.0.0.1|22|");
+
+            verify(door).reply(startsWith("200"));
+        }
+
+    @Test
+    public void EPRTshouldReply200ForValidIP6Arg()
+            throws FTPCommandException {
+            doCallRealMethod().when(door).ac_eprt(anyString());
+            doCallRealMethod().when(door).getExtendedAddressOf(anyString());
+            doCallRealMethod().when(door).ok(anyString());
+
+            door.ac_eprt("|2|::1|22|");
+
+            verify(door).reply(startsWith("200"));
+        }
+
+    @Test
+    public void EPRTshouldReply501ForInvalidIP4Arg()
+            throws FTPCommandException {
+            doCallRealMethod().when(door).ac_eprt(anyString());
+            doCallRealMethod().when(door).getExtendedAddressOf(anyString());
+
+            thrown.expectCode(501);
+            door.ac_eprt("|1|999.0.0.0|22|");
+        }
+
+    @Test
+    public void EPRTshouldReply501ForInvalidIP6Arg()
+            throws FTPCommandException {
+            doCallRealMethod().when(door).ac_eprt(anyString());
+            doCallRealMethod().when(door).getExtendedAddressOf(anyString());
+
+            thrown.expectCode(501);
+            door.ac_eprt("|2|:999999::1|22|");
+        }
+
+    @Test
+    public void EPRTshouldReply522ForMissingProtocolArg()
+            throws FTPCommandException {
+            doCallRealMethod().when(door).ac_eprt(anyString());
+            doCallRealMethod().when(door).getExtendedAddressOf(anyString());
+
+            thrown.expectCode(501);
+            door.ac_eprt("|127.0.0.1|22|");
+        }
+
+    @Test
+    public void EPRTshouldReply522ForEmptyProtocolArg()
+            throws FTPCommandException {
+            doCallRealMethod().when(door).ac_eprt(anyString());
+            doCallRealMethod().when(door).getExtendedAddressOf(anyString());
+
+            thrown.expectCode(522);
+            door.ac_eprt("||127.0.0.1|22|");
+        }
+
+    @Test
+    public void EPRTshouldReply501ForMissingArg()
+            throws FTPCommandException {
+            doCallRealMethod().when(door).ac_eprt(anyString());
+            doCallRealMethod().when(door).getExtendedAddressOf(anyString());
+
+            thrown.expectCode(501);
+            door.ac_eprt("");
+        }
+
+    @Test
+    public void EPRTshouldReply501ForTooManyArgs()
+            throws FTPCommandException {
+        doCallRealMethod().when(door).ac_eprt(anyString());
+        doCallRealMethod().when(door).getExtendedAddressOf(anyString());
+
+        thrown.expectCode(501);
+        door.ac_eprt("||||1|||127.0.0.1||22||||");
+    }
+
+    @Test
+    public void EPRTshouldReply522ForUnsupportedProtocol()
+            throws FTPCommandException {
+            doCallRealMethod().when(door).ac_eprt(anyString());
+            doCallRealMethod().when(door).getExtendedAddressOf(anyString());
+
+            thrown.expectCode(522);
+            door.ac_eprt("|3|127.0.0.1|22|");
+        }
+
+    @Test
+    public void EPSVshouldReply200WhenConnectionEstablished()
+            throws FTPCommandException, UnknownHostException {
+            doCallRealMethod().when(door).ac_epsv(anyString());
+            when(door.setPassive()).thenReturn(new InetSocketAddress(forString("::1"), 20));
+
+            door.ac_epsv("");
+
+            verify(door).reply(startsWith("229"));
+        }
+
+    @Test
+    public void EPSVshouldReply522WhenRequestingInvalidProtocol()
+            throws FTPCommandException, UnknownHostException {
+            doCallRealMethod().when(door).ac_epsv(anyString());
+            when(door.setPassive()).thenReturn(new InetSocketAddress(forString("::1"), 20));
+
+            thrown.expectCode(522);
+            door.ac_epsv("3");
+        }
+
+    @Test
+    public void EPSVshouldReply200WhenRequestingAll()
+            throws FTPCommandException, UnknownHostException
+    {
+            doCallRealMethod().when(door).ac_epsv(anyString());
+            doCallRealMethod().when(door).ok(anyString());
+            when(door.setPassive()).thenReturn(new InetSocketAddress(forString("::1"), 20));
+
+            door.ac_epsv("all");
+
+            verify(door).reply(startsWith("200"));
+    }
+
+    @Test
+    public void EPSVshouldReply229WhenRequestingAllFollowedByEPSVwithoutArgument()
+            throws FTPCommandException, UnknownHostException
+    {
+        doCallRealMethod().when(door).ac_epsv(anyString());
+        doCallRealMethod().when(door).ok(anyString());
+        when(door.setPassive()).thenReturn(new InetSocketAddress(forString("::1"), 20));
+
+        door.ac_epsv("all");
+
+        door.ac_epsv("");
+
+        verify(door).reply(startsWith("229"));
+    }
+
+    @Test
+    public void PASVshouldBeRejectedAfterEPSVallCall()
+            throws FTPCommandException, UnknownHostException
+    {
+            doCallRealMethod().when(door).ac_epsv(anyString());
+            doCallRealMethod().when(door).ac_pasv(anyString());
+            when(door.setPassive()).thenReturn(new InetSocketAddress(forString("::1"), 20));
+
+            door.ac_epsv("all");
+            thrown.expectCode(503);
+            door.ac_pasv("192,168,1,1,6666");
+        }
+
+    @Test
+    public void PORTshouldBeRejectedAfterEPSVallCall()
+            throws FTPCommandException, UnknownHostException
+    {
+            doCallRealMethod().when(door).ac_epsv(anyString());
+            doCallRealMethod().when(door).ac_port(anyString());
+            doCallRealMethod().when(door).setActive((InetSocketAddress)any());
+            when(door.setPassive()).thenReturn(new InetSocketAddress(forString("::1"), 20));
+
+            door.ac_epsv("all");
+            thrown.expectCode(503);
+            door.ac_port("192,168,1,1,0,20");
+        }
+
+    @Test
+    public void EPRTshouldBeRejectedAfterEPSVallCall()
+            throws FTPCommandException, UnknownHostException
+    {
+            doCallRealMethod().when(door).ac_epsv(anyString());
+            doCallRealMethod().when(door).ac_eprt(anyString());
+            doCallRealMethod().when(door).setActive((InetSocketAddress)any());
+            when(door.setPassive()).thenReturn(new InetSocketAddress(forString("::1"), 20));
+
+            door.ac_epsv("all");
+            thrown.expectCode(503);
+            door.ac_eprt("|3|127.0.0.1|22|");
+        }
+
+    @Test
+    public void EPSVshouldRebindIpWhenRequestedIPv6Protocol()
+            throws Exception {
+            doCallRealMethod().when(door).ac_epsv(anyString());
+            doCallRealMethod().when(door).setPassive();
+            when(streamEngine.getLocalAddress()).thenReturn(forString("127.0.0.1"));
+            when(streamEngine.getInetAddress()).thenReturn(forString("127.0.0.1"));
+
+            door._passiveModePortRange = new PortRange(0);
+
+            door.ac_epsv("2");
+            door.ac_epsv("");
+
+            assertThat(door._preferredProtocol, is(AbstractFtpDoorV1.Protocol.IPV6));
+            assertEquals(Inet6Address.class, ((InetSocketAddress)door._passiveModeServerSocket.getLocalAddress()).getAddress().getClass());
+        }
+
+    @Test
+    public void EPSVshouldRebindIpWhenRequestedIPv4Protocol()
+            throws Exception {
+            doCallRealMethod().when(door).ac_epsv(anyString());
+            doCallRealMethod().when(door).setPassive();
+            when(streamEngine.getLocalAddress()).thenReturn(forString("::1"));
+            when(streamEngine.getInetAddress()).thenReturn(forString("::1"));
+            door._passiveModePortRange = new PortRange(0);
+
+            door.ac_epsv("1");
+            door.ac_epsv("");
+
+            assertThat(door._preferredProtocol, is(AbstractFtpDoorV1.Protocol.IPV4));
+            assertEquals(Inet4Address.class, ((InetSocketAddress)door._passiveModeServerSocket.getLocalAddress()).getAddress().getClass());
+        }
+
+    @Test
+    public void EPSVshouldReply522WhenRequestedUnsupportedProtocol()
+            throws FTPCommandException {
+            doCallRealMethod().when(door).ac_epsv(anyString());
+
+            thrown.expectCode(522);
+            door.ac_epsv("3");
+        }
+    @Test
     public void whenMkdSuccessfulReply257() throws Exception {
         doCallRealMethod().when(door).ac_mkd(anyString());
         door.ac_mkd(NEW_DIR);
-        verify(door).reply(startsWith("257 \"/cwd/"+NEW_DIR.replaceAll("\"","\"\"")+"\""));
+        verify(door).reply(startsWith("257 \"/cwd/" + NEW_DIR.replaceAll("\"", "\"\"") + "\""));
     }
 
     @Test
@@ -185,7 +425,7 @@ public class AbstractFtpDoorV1Test {
     @Test
     public void whenMkdCacheException550() throws Exception {
         doCallRealMethod().when(door).ac_mkd(anyString());
-        when(pnfs.createPnfsDirectory("/pathRoot/cwd/"+NEW_DIR)).thenThrow(CacheException.class);
+        when(pnfs.createPnfsDirectory("/pathRoot/cwd/" + NEW_DIR)).thenThrow(CacheException.class);
         thrown.expectCode(550);
         door.ac_mkd(NEW_DIR);
     }
@@ -234,8 +474,8 @@ public class AbstractFtpDoorV1Test {
     public void whenDeleCacheExceptionReply550() throws Exception {
         doCallRealMethod().when(door).ac_dele(anyString());
         doThrow(new CacheException("Cache Exception")).
-                when(pnfs).deletePnfsEntry("/pathRoot/cwd/"+SRC_FILE,
-                                           EnumSet.of(FileType.REGULAR, FileType.LINK));
+                when(pnfs).deletePnfsEntry("/pathRoot/cwd/" + SRC_FILE,
+                EnumSet.of(FileType.REGULAR, FileType.LINK));
         thrown.expectCode(550);
         door.ac_dele(SRC_FILE);
     }
@@ -291,9 +531,9 @@ public class AbstractFtpDoorV1Test {
     public void whenRmdCacheExceptionReply550() throws Exception {
         doCallRealMethod().when(door).ac_rmd(anyString());
         doThrow(new CacheException("Cache Exception")).
-            when(pnfs).deletePnfsEntry("/pathRoot/cwd/"+OLD_DIR,
-                                       EnumSet.of(FileType.DIR));
+            when(pnfs).deletePnfsEntry("/pathRoot/cwd/" + OLD_DIR,
+                EnumSet.of(FileType.DIR));
         thrown.expectCode(550);
         door.ac_rmd(OLD_DIR);
-}
+    }
 }
