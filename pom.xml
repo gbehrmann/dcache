@@ -897,6 +897,12 @@
                         <source>1.7</source>
                         <target>1.7</target>
                         <complianceLevel>1.7</complianceLevel>
+                        <XhasMember>true</XhasMember>
+                        <sources>
+                            <source>
+                                <basedir>${project.basedir}/src/main/aspect</basedir>
+                            </source>
+                        </sources>
                     </configuration>
                     <executions>
                         <execution>
