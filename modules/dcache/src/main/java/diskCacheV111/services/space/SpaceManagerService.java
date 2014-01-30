@@ -1167,7 +1167,7 @@ public final class SpaceManagerService
                 } else if (f.getState() == FileState.STORED || f.getPath() == null) {
                     f.setDeleted(true);
                     db.updateFile(f);
-                } else if (f.getState() == FileState.TRANSFERRING || f.getState() == FileState.ALLOCATED) {
+                } else if (f.getState() == FileState.TRANSFERRING) {
                     f.setPnfsId(null);
                     f.setState(FileState.ALLOCATED);
                     db.updateFile(f);
