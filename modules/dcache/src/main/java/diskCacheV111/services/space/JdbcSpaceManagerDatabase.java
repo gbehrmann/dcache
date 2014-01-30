@@ -112,10 +112,6 @@ public class JdbcSpaceManagerDatabase extends JdbcDaoSupport implements SpaceMan
     */
     private static final String SPACEFILE_TABLE = "srmspacefile";
 
-    private <T> T toNull(T value, boolean makeNull)
-    {
-        return makeNull ? null : value;
-    }
 
     private final RowMapper<Space> spaceReservationMapper = new RowMapper<Space>()
     {
@@ -130,7 +126,7 @@ public class JdbcSpaceManagerDatabase extends JdbcDaoSupport implements SpaceMan
                              set.getLong("linkgroupid"),
                              set.getLong("sizeinbytes"),
                              set.getLong("creationtime"),
-                             toNull(set.getLong("expirationtime"), set.wasNull()),
+                             set.getLong("expirationtime"),
                              set.getString("description"),
                              SpaceState.valueOf(set.getInt("state")),
                              set.getLong("usedspaceinbytes"),
@@ -175,7 +171,7 @@ public class JdbcSpaceManagerDatabase extends JdbcDaoSupport implements SpaceMan
                             set.getLong("spacereservationid"),
                             set.getLong("sizeinbytes"),
                             set.getLong("creationtime"),
-                            toNull(set.getLong("expirationtime"), set.wasNull()),
+                            set.getLong("expirationtime"),
                             (path != null) ? new FsPath(path) : null,
                             (pnfsId != null) ? new PnfsId(pnfsId) : null,
                             FileState.valueOf(set.getInt("state")),
