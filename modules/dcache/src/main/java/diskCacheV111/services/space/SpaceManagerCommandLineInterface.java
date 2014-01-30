@@ -1,9 +1,11 @@
 package diskCacheV111.services.space;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Throwables;
 import com.google.common.collect.Maps;
 import org.springframework.beans.factory.annotation.Required;
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.Serializable;
@@ -92,7 +94,7 @@ public class SpaceManagerCommandLineInterface implements CellCommandListener
      *
      * Executes all commands in a database transaction.
      */
-    private abstract class AsyncCommand<T extends Serializable> extends DelayedCommand<T>
+    private abstract class AsyncCommand extends DelayedCommand<String>
     {
         public AsyncCommand()
         {
@@ -100,19 +102,31 @@ public class SpaceManagerCommandLineInterface implements CellCommandListener
         }
 
         @Override
-        protected final T execute() throws Exception
+        protected final String execute()
+                throws SpaceException, CacheException, CommandSyntaxException, DataAccessException, IllegalArgumentException
         {
-            return callInTransaction(new Callable<T>()
-            {
-                @Override
-                public T call() throws Exception
+            try {
+                return callInTransaction(new Callable<String>()
                 {
-                    return executeInTransaction();
-                }
-            });
+                    @Override
+                    public String call() throws Exception
+                    {
+                        return executeInTransaction();
+                    }
+                });
+            } catch (EmptyResultDataAccessException e) {
+                // These are usually a result of the user querying for an object that doesn't exist.
+                return e.getMessage();
+            } catch (Exception e) {
+                Throwables.propagateIfInstanceOf(e, CommandSyntaxException.class);
+                Throwables.propagateIfInstanceOf(e, SpaceException.class);
+                Throwables.propagateIfInstanceOf(e, CacheException.class);
+                throw Throwables.propagate(e);
+            }
         }
 
-        protected abstract T executeInTransaction() throws Exception;
+        protected abstract String executeInTransaction()
+                throws SpaceException, CacheException, CommandSyntaxException, DataAccessException, IllegalArgumentException;
     }
 
     @Command(name = "release space", hint = "release reservation",
@@ -120,7 +134,7 @@ public class SpaceManagerCommandLineInterface implements CellCommandListener
                      "from dCache, but the space occupied by those files is no longer accounted " +
                      "for by the space manager. Such files will continue to appear as used space in " +
                      "their link group.")
-    public class ReleaseSpaceCommand extends AsyncCommand<String>
+    public class ReleaseSpaceCommand extends AsyncCommand
     {
         @Argument
         long token;
@@ -136,7 +150,7 @@ public class SpaceManagerCommandLineInterface implements CellCommandListener
     }
 
     @Command(name = "update space", hint = "modify space reservation parameters")
-    public class UpdateSpaceCommand extends AsyncCommand<String>
+    public class UpdateSpaceCommand extends AsyncCommand
     {
         @Option(name = "size",
                 usage = "Size in bytes, with optional byte unit suffix using either SI or IEEE 1541 prefixes.",
@@ -240,7 +254,7 @@ public class SpaceManagerCommandLineInterface implements CellCommandListener
                      "reserved by creating new space reservations or by enlarging existing reservations. " +
                      "Since pools may go offline, unreserved space can become negative. In this case " +
                      "the link group is overallocated and the reserved space is no longer guaranteed.")
-    public class ListLinkGroupsCommand extends AsyncCommand<String>
+    public class ListLinkGroupsCommand extends AsyncCommand
     {
         @Option(name = "a", usage = "Include link groups that have not been refreshed recently.")
         boolean all;
@@ -336,7 +350,7 @@ public class SpaceManagerCommandLineInterface implements CellCommandListener
                      "reserved space of the link group within which the space exists. Note that ones " +
                      "a file is uploaded to a space reservation, the space consumed by the file is " +
                      "obviously not free anymore and will thus not appear in the link group statistics.")
-    public class ListSpacesCommand extends AsyncCommand<String>
+    public class ListSpacesCommand extends AsyncCommand
     {
         @Option(name = "a", usage = "Include ephemeral, expired and released space reservations.")
         boolean all;
@@ -401,8 +415,7 @@ public class SpaceManagerCommandLineInterface implements CellCommandListener
             }
             writer
                     .space().header("RETENTION").left("rp")
-                    .space().header("LATENCY").left("al")
-                    .space().header("FILES").right("files");
+                    .space().header("LATENCY").left("al");
             if (verbose || owner != null) {
                 writer.space().header("OWNER").left("owner");
             }
@@ -453,7 +466,6 @@ public class SpaceManagerCommandLineInterface implements CellCommandListener
                         .value("linkgroup", linkGroups.get(space.getLinkGroupId()))
                         .value("rp", space.getRetentionPolicy())
                         .value("al", space.getAccessLatency())
-                        .value("files", db.count(db.files().whereSpaceTokenIs(space.getId())))
                         .value("allocated", space.getAllocatedSpaceInBytes())
                         .value("used", space.getUsedSizeInBytes())
                         .value("free", space.getAvailableSpaceInBytes())
@@ -538,7 +550,7 @@ public class SpaceManagerCommandLineInterface implements CellCommandListener
                      "moved to the STORED or FLUSHED state, such entries will be deleted when they " +
                      "expire. The associated name space entry of TRANSFERRING files will be deleted " +
                      "too.")
-    public class ListFilesCommand extends AsyncCommand<String>
+    public class ListFilesCommand extends AsyncCommand
     {
         @Option(name = "owner",
                 usage = "Only show files whose owner matches this pattern.",
@@ -699,7 +711,7 @@ public class SpaceManagerCommandLineInterface implements CellCommandListener
 
                      "The size argument accepts an optional byte unit suffix using either SI or " +
                      "IEEE 1541 prefixes.")
-    public class ReserveSpaceCommand extends AsyncCommand<String>
+    public class ReserveSpaceCommand extends AsyncCommand
     {
         @Option(name = "owner", usage = "User name or FQAN.", valueSpec="USER|FQAN")
         String owner;
@@ -782,7 +794,7 @@ public class SpaceManagerCommandLineInterface implements CellCommandListener
 
                      "This command is the file level equivalent to releasing the entire space " +
                      "reservation.")
-    public class PurgeFileCommand extends AsyncCommand<String>
+    public class PurgeFileCommand extends AsyncCommand
     {
         @Option(name = "pnfsid", usage = "PNFS ID of file.")
         PnfsId pnfsId;
@@ -827,7 +839,7 @@ public class SpaceManagerCommandLineInterface implements CellCommandListener
                      "Space reservations that have an expiration date are purged automatically after " +
                      "a configurable amount of time after they expire. Space reservations without an " +
                      "expiration data have to be purged explicitly.")
-    public class PurgeSpacesCommand extends AsyncCommand<String>
+    public class PurgeSpacesCommand extends AsyncCommand
     {
         @Override
         protected String executeInTransaction() throws DataAccessException

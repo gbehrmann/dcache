@@ -112,6 +112,10 @@ public class JdbcSpaceManagerDatabase extends JdbcDaoSupport implements SpaceMan
     */
     private static final String SPACEFILE_TABLE = "srmspacefile";
 
+    private <T> T toNull(T value, boolean makeNull)
+    {
+        return makeNull ? null : value;
+    }
 
     private final RowMapper<Space> spaceReservationMapper = new RowMapper<Space>()
     {
@@ -126,7 +130,7 @@ public class JdbcSpaceManagerDatabase extends JdbcDaoSupport implements SpaceMan
                              set.getLong("linkgroupid"),
                              set.getLong("sizeinbytes"),
                              set.getLong("creationtime"),
-                             set.getLong("expirationtime"),
+                             toNull(set.getLong("expirationtime"), set.wasNull()),
                              set.getString("description"),
                              SpaceState.valueOf(set.getInt("state")),
                              set.getLong("usedspaceinbytes"),
@@ -171,7 +175,7 @@ public class JdbcSpaceManagerDatabase extends JdbcDaoSupport implements SpaceMan
                             set.getLong("spacereservationid"),
                             set.getLong("sizeinbytes"),
                             set.getLong("creationtime"),
-                            set.getLong("expirationtime"),
+                            toNull(set.getLong("expirationtime"), set.wasNull()),
                             (path != null) ? new FsPath(path) : null,
                             (pnfsId != null) ? new PnfsId(pnfsId) : null,
                             FileState.valueOf(set.getInt("state")),
@@ -455,7 +459,7 @@ public class JdbcSpaceManagerDatabase extends JdbcDaoSupport implements SpaceMan
                         stmt.setLong(5, linkGroupId);
                         stmt.setLong(6, sizeInBytes);
                         stmt.setLong(7, creationTime);
-                        stmt.setLong(8, (lifetime == -1) ? null : creationTime + lifetime);
+                        stmt.setObject(8, (lifetime == -1) ? null : creationTime + lifetime);
                         stmt.setString(9, description);
                         stmt.setInt(10, state.getStateId());
                         stmt.setLong(11, used);
@@ -880,7 +884,7 @@ public class JdbcSpaceManagerDatabase extends JdbcDaoSupport implements SpaceMan
                 stmt.setLong(3, reservationId);
                 stmt.setLong(4, sizeInBytes);
                 stmt.setLong(5, creationTime);
-                stmt.setLong(6, (lifetime == -1) ? null : creationTime + lifetime);
+                stmt.setObject(6, (lifetime == -1) ? null : creationTime + lifetime);
                 stmt.setString(7, Objects.toString(path, null));
                 stmt.setString(8, Objects.toString(pnfsId, null));
                 stmt.setInt(9, FileState.ALLOCATED.getStateId());
