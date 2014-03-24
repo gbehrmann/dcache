@@ -91,6 +91,7 @@ public class Indexer
             return Collections.emptyList();
         }
     };
+    public static final double DEFAULT_FPP = 0.002;
 
     private final ConfigurationProperties configuration;
     private final boolean isFlat;
@@ -103,7 +104,7 @@ public class Indexer
 
     private Indexer(Args args) throws IOException, URISyntaxException, ClassNotFoundException
     {
-        double fpp = args.getDoubleOption("fpp", 0.01);
+        double fpp = args.getDoubleOption("fpp", DEFAULT_FPP);
 
         configuration = new LayoutBuilder().build().properties();
         isFlat = Boolean.valueOf(args.getOption("flat", configuration.getValue(BILLING_TEXT_FLAT_DIR)));
@@ -278,7 +279,7 @@ public class Indexer
         out.println("          taken from dCache configuration.");
         out.println("   -fpp=PROP");
         out.println("          The false positive probability expressed as a value in (0;1]. The");
-        out.println("          default is 0.01.");
+        out.println("          default is " + DEFAULT_FPP + '.');
     }
 
     private Date getYesterday()
