@@ -1,5 +1,8 @@
 package dmg.cells.nucleus;
 
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.Date;
 import java.util.concurrent.atomic.AtomicLong;
@@ -15,7 +18,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * fact and a lot of things may fail at runtime if this design item is changed.
  */
 
-public class UOID implements Serializable, Cloneable {
+public final class UOID implements Serializable, Cloneable {
 
     private static final long serialVersionUID = -5940693996555861085L;
 
@@ -33,6 +36,12 @@ public class UOID implements Serializable, Cloneable {
     public UOID() {
         _time = System.currentTimeMillis();
         _counter = __counter.incrementAndGet();
+    }
+
+    UOID(long counter, long time)
+    {
+        _counter = counter;
+        _time = time;
     }
 
     @Override
@@ -79,5 +88,16 @@ public class UOID implements Serializable, Cloneable {
             System.out.println(date.toString());
         }
 
+    }
+
+    public void writeTo(DataOutput out) throws IOException
+    {
+        out.writeLong(_counter);
+        out.writeLong(_time);
+    }
+
+    public static UOID createFrom(DataInput in) throws IOException
+    {
+        return new UOID(in.readLong(), in.readLong());
     }
 }

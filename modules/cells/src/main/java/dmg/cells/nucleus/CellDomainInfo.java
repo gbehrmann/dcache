@@ -1,32 +1,17 @@
 package dmg.cells.nucleus;
 
 import java.io.Serializable;
-import java.util.List;
 
-/**
- * @author Patrick Fuhrmann
- * @version 0.1, 15 Feb 1998
- */
 public class CellDomainInfo implements Serializable
 {
     private static final long serialVersionUID = 486982068268709272L;
-    private String _domainName = "Unknown";
-    private String _version;
-
-    public CellDomainInfo(String name)
-    {
-        _domainName = name;
-    }
+    private final String _domainName;
+    private final String _version;
 
     public CellDomainInfo(String name, String version)
     {
-        this(name);
-        _version = version;
-    }
-
-    void setCellDomainName(String name)
-    {
         _domainName = name;
+        _version = version;
     }
 
     public String getVersion()
@@ -43,5 +28,4 @@ public class CellDomainInfo implements Serializable
     {
         return _domainName;
     }
-
 }

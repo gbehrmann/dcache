@@ -5,6 +5,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -27,6 +29,7 @@ import dmg.cells.nucleus.CellTunnel;
 import dmg.cells.nucleus.CellTunnelInfo;
 import dmg.cells.nucleus.MessageEvent;
 import dmg.cells.nucleus.NoRouteToCellException;
+import dmg.cells.nucleus.Releases;
 import dmg.cells.nucleus.RoutedMessageEvent;
 import dmg.cells.nucleus.SerializationException;
 import dmg.util.StreamEngine;
@@ -44,15 +47,14 @@ public class LocationMgrTunnel
     extends CellAdapter
     implements CellTunnel, Runnable
 {
-
     /**
      * We use a single shared instance of Tunnels to coordinate route
      * creation between tunnels.
      */
-    private final static Tunnels _tunnels = new Tunnels();
+    private static final Tunnels _tunnels = new Tunnels();
 
-    private final static Logger _log =
-        LoggerFactory.getLogger(LocationMgrTunnel.class);
+    private static final Logger _log = LoggerFactory.getLogger(LocationMgrTunnel.class);
+    private static final String VERSION = Version.of(LocationMgrTunnel.class).getVersion();
 
     private final CellNucleus  _nucleus;
 
@@ -95,26 +97,44 @@ public class LocationMgrTunnel
 
     private void handshake() throws IOException
     {
-        try  {
+        try {
             ObjectOutputStream out = new ObjectOutputStream(_rawOut);
-            out.writeObject(new CellDomainInfo(_nucleus.getCellDomainName(),
-                    Version.of(LocationMgrTunnel.class).getVersion()));
+            out.writeObject(new CellDomainInfo(_nucleus.getCellDomainName(), VERSION));
             out.flush();
             ObjectInputStream in = new ObjectInputStream(_rawIn);
 
             _remoteDomainInfo = (CellDomainInfo) in.readObject();
 
             if (_remoteDomainInfo == null) {
-                throw new IOException("EOS encountered while reading DomainInfo");
+                throw new IOException("Remote dCache domain disconnected during handshake.");
             }
 
-            _input = new JavaObjectSource(in);
-            _output = new JavaObjectSink(out);
+            String version = _remoteDomainInfo.getVersion();
+            if (version == null) {
+                throw new IOException("Connection from dCache older than 2.6 rejected.");
+            }
+            short remoteRelease = Releases.getRelease(version);
+            if (remoteRelease < Releases.RELEASE_2_10) {
+                throw new IOException("Connection from dCache older than 2.10 rejected.");
+            } else if (remoteRelease < Releases.RELEASE_2_13) {
+                /* Releases before dCache 2.13 use Java Serialization for CellMessage.
+                 * This branch can be removed in 2.14.
+                 */
+                _log.debug("Using Java serialization for message envelope.");
+                _input = new JavaObjectSource(in);
+                _output = new JavaObjectSink(out);
+            } else {
+                _log.debug("Using raw serialization for message envelope.");
+
+                /* Since dCache 2.13 we use raw encoding of CellMessage.
+                 */
+                _input = new RawObjectSource(_rawIn);
+                _output = new RawObjectSink(_rawOut);
+            }
+            _log.info("Established connection with {} version {}.", getRemoteDomainName(), version);
         } catch (ClassNotFoundException e) {
             throw new IOException("Cannot deserialize object. This is most likely due to a version mismatch.", e);
         }
-
-        _log.debug("Established tunnel to {}", getRemoteDomainName());
     }
 
     synchronized private void setDown(boolean down)
@@ -202,8 +222,7 @@ public class LocationMgrTunnel
     public CellTunnelInfo getCellTunnelInfo()
     {
         return new CellTunnelInfo(getCellName(),
-                new CellDomainInfo(_nucleus.getCellDomainName()),
-                                  _remoteDomainInfo);
+                new CellDomainInfo(_nucleus.getCellDomainName(), VERSION), _remoteDomainInfo);
     }
 
     protected String getRemoteDomainName()
@@ -363,12 +382,45 @@ public class LocationMgrTunnel
              * object DAG at the other end. To avoid that the receiver
              * needs to unnecessarily keep references to previous objects,
              * we reset the stream. Notice that resetting the stream sends
-             * a reset messsage. Hence we reset the stream before flushing
+             * a reset message. Hence we reset the stream before flushing
              * it.
              */
             out.writeObject(message);
             out.reset();
             out.flush();
+        }
+    }
+
+    private static class RawObjectSink implements ObjectSink
+    {
+        private final DataOutputStream out;
+
+        private RawObjectSink(OutputStream out)
+        {
+            this.out = new DataOutputStream(out);
+        }
+
+        @Override
+        public void writeObject(CellMessage message) throws IOException
+        {
+            message.writeTo(out);
+            out.flush();
+        }
+    }
+
+    private static class RawObjectSource implements ObjectSource
+    {
+        private final DataInputStream in;
+
+        private RawObjectSource(InputStream in)
+        {
+            this.in = new DataInputStream(in);
+        }
+
+        @Override
+        public CellMessage readObject() throws IOException, ClassNotFoundException
+        {
+            return CellMessage.createFrom(in);
         }
     }
 }

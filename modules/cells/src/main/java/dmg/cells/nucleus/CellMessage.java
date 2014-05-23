@@ -1,15 +1,19 @@
 package dmg.cells.nucleus ;
 
+import com.google.common.base.Strings;
 import com.google.common.base.Throwables;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.DataInput;
+import java.io.DataOutput;
 import java.io.IOException;
 import java.io.InvalidClassException;
 import java.io.NotSerializableException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
+import java.util.Objects;
 
 import static com.google.common.base.Preconditions.checkState;
 
@@ -87,7 +91,7 @@ public class CellMessage implements Cloneable , Serializable {
     if (_ttl < Long.MAX_VALUE) {
         sb.append(";TTL=").append(_ttl);
     }
-    sb.append( ">" ) ;
+    sb.append(">") ;
     return sb.toString() ;
   }
   @Override
@@ -142,7 +146,6 @@ public boolean equals( Object obj ){
     public CellMessage()
     {
         _mode = DUMMY_MODE;
-        _messageStream = null;
     }
 
     /**
@@ -247,4 +250,46 @@ public boolean equals( Object obj ){
                 : _ttl - Math.min(TTL_BUFFER_MAXIMUM, (long) (_ttl * TTL_BUFFER_FRACTION));
     }
 
+    public void writeTo(DataOutput out) throws IOException
+    {
+        checkState(_mode == STREAM_MODE);
+
+        out.writeByte(_mode);
+        out.writeBoolean(_isPersistent);
+        out.writeLong(_creationTime);
+        out.writeLong(_ttl);
+        _umid.writeTo(out);
+        _lastUmid.writeTo(out);
+        _source.writeTo(out);
+        _destination.writeTo(out);
+
+        out.writeUTF(Objects.toString(_session, ""));
+        out.writeInt(_messageStream.length);
+        out.write(_messageStream);
+    }
+
+    public static CellMessage createFrom(DataInput in) throws IOException
+    {
+        CellMessage message = new CellMessage();
+        message._mode = in.readByte();
+        if (message._mode != STREAM_MODE) {
+            throw new IOException("Invalid message tunnel wire format.");
+        }
+        /* Need to initialize the transient reception time after the first field is read as
+         * this function may have been called while the input stream is empty.
+         */
+        message._receivedAt = System.currentTimeMillis();
+        message._isPersistent = in.readBoolean();
+        message._creationTime = in.readLong();
+        message._ttl = in.readLong();
+        message._umid = UOID.createFrom(in);
+        message._lastUmid = UOID.createFrom(in);
+        message._source = CellPath.createFrom(in);
+        message._destination = CellPath.createFrom(in);
+        message._session = Strings.emptyToNull(in.readUTF());
+        int len = in.readInt();
+        message._messageStream = new byte[len];
+        in.readFully(message._messageStream);
+        return message;
+    }
 }
