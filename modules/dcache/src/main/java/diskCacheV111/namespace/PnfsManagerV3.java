@@ -1,7 +1,9 @@
 package diskCacheV111.namespace;
 
 import com.google.common.base.Splitter;
+import com.google.common.base.Stopwatch;
 import com.google.common.base.Strings;
+import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -15,8 +17,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import javax.security.auth.Subject;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.PrintWriter;
+import java.net.InetSocketAddress;
 import java.security.NoSuchAlgorithmException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -33,6 +40,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
+import diskCacheV111.util.AccessLatency;
 import diskCacheV111.util.CacheException;
 import diskCacheV111.util.ChecksumFactory;
 import diskCacheV111.util.FileNotFoundCacheException;
@@ -42,6 +50,9 @@ import diskCacheV111.util.MissingResourceCacheException;
 import diskCacheV111.util.NotDirCacheException;
 import diskCacheV111.util.PermissionDeniedCacheException;
 import diskCacheV111.util.PnfsId;
+import diskCacheV111.util.RetentionPolicy;
+import diskCacheV111.util.SpreadAndWait;
+import diskCacheV111.vehicles.HttpProtocolInfo;
 import diskCacheV111.vehicles.Message;
 import diskCacheV111.vehicles.PnfsAddCacheLocationMessage;
 import diskCacheV111.vehicles.PnfsCancelUpload;
@@ -59,7 +70,9 @@ import diskCacheV111.vehicles.PnfsMessage;
 import diskCacheV111.vehicles.PnfsModifyCacheLocationMessage;
 import diskCacheV111.vehicles.PnfsRenameMessage;
 import diskCacheV111.vehicles.PnfsSetChecksumMessage;
+import diskCacheV111.vehicles.PoolAcceptFileMessage;
 import diskCacheV111.vehicles.PoolFileFlushedMessage;
+import diskCacheV111.vehicles.PoolMgrSelectWritePoolMsg;
 import diskCacheV111.vehicles.StorageInfo;
 import diskCacheV111.vehicles.StorageInfos;
 
@@ -746,6 +759,178 @@ public class PnfsManagerV3
         return "";
 
     }
+
+    public String ac_test_pool_sequential_$_2(Args args) throws Exception {
+        String path = args.argv(1);
+        PnfsId pnfsId = _nameSpaceProvider.pathToPnfsid(Subjects.ROOT, path, false);
+        FileAttributes fileAttributes = _nameSpaceProvider.getFileAttributes(Subjects.ROOT, pnfsId, Sets.newHashSet(
+                PoolMgrSelectWritePoolMsg.getRequiredAttributes()));
+        fileAttributes.setAccessLatency(AccessLatency.ONLINE);
+        fileAttributes.setRetentionPolicy(RetentionPolicy.REPLICA);
+
+        InetSocketAddress address = new InetSocketAddress(1234);
+        String cellName = getCellName();
+        String domainName = getCellDomainName();
+        int cnt = Integer.parseInt(args.argv(0));
+
+        CellStub stub = new CellStub(getCellEndpoint(), new CellPath("pool_write"), 10000);
+
+        Stopwatch time = Stopwatch.createStarted();
+        for (int i = 0; i < cnt; i++) {
+            CellPath poolPath = new CellPath("PoolManager");
+            poolPath.add("pool_write");
+            stub.sendAndWait(poolPath, new PoolAcceptFileMessage("pool_write",
+                                                                 new HttpProtocolInfo("HTTP", 1, 0, address, cellName, domainName, path, null),
+                                                                 fileAttributes));
+        }
+        return time.toString();
+    }
+
+    public String ac_test_pool_spreadandwait_$_2(Args args) throws Exception {
+        String path = args.argv(1);
+        PnfsId pnfsId = _nameSpaceProvider.pathToPnfsid(Subjects.ROOT, path, false);
+        FileAttributes fileAttributes = _nameSpaceProvider.getFileAttributes(Subjects.ROOT, pnfsId, Sets.newHashSet(
+                PoolMgrSelectWritePoolMsg.getRequiredAttributes()));
+        fileAttributes.setAccessLatency(AccessLatency.ONLINE);
+        fileAttributes.setRetentionPolicy(RetentionPolicy.REPLICA);
+
+        InetSocketAddress address = new InetSocketAddress(1234);
+        String cellName = getCellName();
+        String domainName = getCellDomainName();
+        int cnt = Integer.parseInt(args.argv(0));
+
+        CellStub stub = new CellStub(getCellEndpoint(), new CellPath("pool_write"), 10000);
+
+        SpreadAndWait<PoolAcceptFileMessage> spread = new SpreadAndWait<>(stub);
+
+        Stopwatch time = Stopwatch.createStarted();
+        for (int i = 0; i < cnt; i++) {
+            CellPath poolPath = new CellPath("PoolManager");
+            poolPath.add("pool_write");
+            spread.send(poolPath, PoolAcceptFileMessage.class,
+                        new PoolAcceptFileMessage("pool_write",
+                                                  new HttpProtocolInfo("HTTP", 1, 0, address, cellName, domainName, path, null),
+                                                  fileAttributes));
+        }
+        spread.waitForReplies();
+        return time.toString();
+    }
+
+    public String ac_test_envelope_java_$_2(Args args) throws Exception {
+        String path = args.argv(1);
+        PnfsId pnfsId = _nameSpaceProvider.pathToPnfsid(Subjects.ROOT, path, false);
+        FileAttributes fileAttributes = _nameSpaceProvider.getFileAttributes(Subjects.ROOT, pnfsId, Sets.newHashSet(
+                PoolMgrSelectWritePoolMsg.getRequiredAttributes()));
+        fileAttributes.setAccessLatency(AccessLatency.ONLINE);
+        fileAttributes.setRetentionPolicy(RetentionPolicy.REPLICA);
+
+        int cnt = Integer.parseInt(args.argv(0));
+
+        Stopwatch time = Stopwatch.createStarted();
+        for (int i = 0; i < cnt; i++) {
+            // Send
+            CellPath poolPath = new CellPath("PoolManager");
+            poolPath.add("pool_write");
+            CellMessage message = new CellMessage(poolPath, "foo");
+            message = message.encode();
+
+            ByteArrayOutputStream array = new ByteArrayOutputStream();
+            try (ObjectOutputStream out = new ObjectOutputStream(array)) {
+                out.writeObject(message);
+            }
+            try (ObjectInputStream inStream = new ObjectInputStream(new ByteArrayInputStream(array.toByteArray()))) {
+                message = (CellMessage) inStream.readObject();
+                message = message.decode();
+            }
+        }
+        return time.toString();
+    }
+
+//    public String ac_test_envelope_manual_$_2(Args args) throws Exception {
+//        String path = args.argv(1);
+//        PnfsId pnfsId = _nameSpaceProvider.pathToPnfsid(Subjects.ROOT, path, false);
+//        FileAttributes fileAttributes = _nameSpaceProvider.getFileAttributes(Subjects.ROOT, pnfsId, Sets.newHashSet(
+//                PoolMgrSelectWritePoolMsg.getRequiredAttributes()));
+//        fileAttributes.setAccessLatency(AccessLatency.ONLINE);
+//        fileAttributes.setRetentionPolicy(RetentionPolicy.REPLICA);
+//
+//        int cnt = Integer.parseInt(args.argv(0));
+//
+//        Stopwatch time = Stopwatch.createStarted();
+//        for (int i = 0; i < cnt; i++) {
+//            // Send
+//            CellPath poolPath = new CellPath("PoolManager");
+//            poolPath.add("pool_write");
+//            CellMessage message = new CellMessage(poolPath, "foo");
+//            message = message.encode();
+//
+//            ByteArrayOutputStream array = new ByteArrayOutputStream();
+//            try (DataOutputStream out = new DataOutputStream(array)) {
+//                message.writeTo(out);
+//            }
+//            try (DataInputStream inStream = new DataInputStream(new ByteArrayInputStream(array.toByteArray()))) {
+//                message = CellMessage.createFrom(inStream);
+//                message = message.decode();
+//            }
+//        }
+//        return time.toString();
+//    }
+
+//    public String ac_test_envelope_fst_$_2(Args args) throws Exception {
+//        String path = args.argv(1);
+//        PnfsId pnfsId = _nameSpaceProvider.pathToPnfsid(Subjects.ROOT, path, false);
+//        FileAttributes fileAttributes = _nameSpaceProvider.getFileAttributes(Subjects.ROOT, pnfsId, Sets.newHashSet(
+//                PoolMgrSelectWritePoolMsg.getRequiredAttributes()));
+//        fileAttributes.setAccessLatency(AccessLatency.ONLINE);
+//        fileAttributes.setRetentionPolicy(RetentionPolicy.REPLICA);
+//
+//        int cnt = Integer.parseInt(args.argv(0));
+//
+//        Stopwatch time = Stopwatch.createStarted();
+//        for (int i = 0; i < cnt; i++) {
+//            // Send
+//            CellPath poolPath = new CellPath("PoolManager");
+//            poolPath.add("pool_write");
+//            CellMessage message = new CellMessage(poolPath, "foo");
+//            message = message.encode();
+//
+//            ByteArrayOutputStream array = new ByteArrayOutputStream();
+//            try (FSTObjectOutput out = new FSTObjectOutput(array)) {
+//                out.writeObject(message);
+//            }
+//            try (FSTObjectInput inStream = new FSTObjectInput(new ByteArrayInputStream(array.toByteArray()))) {
+//                message = (CellMessage) inStream.readObject();
+//                message = message.decode();
+//            }
+//        }
+//        return time.toString();
+//    }
+
+    public String ac_test_payload_$_2(Args args) throws Exception {
+        String path = args.argv(1);
+        PnfsId pnfsId = _nameSpaceProvider.pathToPnfsid(Subjects.ROOT, path, false);
+        FileAttributes fileAttributes = _nameSpaceProvider.getFileAttributes(Subjects.ROOT, pnfsId, Sets.newHashSet(
+                PoolMgrSelectWritePoolMsg.getRequiredAttributes()));
+        fileAttributes.setAccessLatency(AccessLatency.ONLINE);
+        fileAttributes.setRetentionPolicy(RetentionPolicy.REPLICA);
+
+        InetSocketAddress address = new InetSocketAddress(1234);
+        String cellName = getCellName();
+        String domainName = getCellDomainName();
+        int cnt = Integer.parseInt(args.argv(0));
+
+        Stopwatch time = Stopwatch.createStarted();
+        for (int i = 0; i < cnt; i++) {
+            CellPath poolPath = new CellPath("PoolManager");
+            poolPath.add("pool_write");
+            CellMessage message = new CellMessage(poolPath, new PoolAcceptFileMessage("pool_write",
+                                                                                      new HttpProtocolInfo("HTTP", 1, 0, address, cellName, domainName, path, null),
+                                                                                      fileAttributes));
+            message.encode().decode();
+        }
+        return time.toString();
+    }
+
 
     public static final String hh_clear_file_cache_location = "<pnfsid> <pool name>";
     public String ac_clear_file_cache_location_$_2(Args args) throws Exception {
