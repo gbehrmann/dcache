@@ -9,6 +9,7 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import org.globus.gsi.gssapi.jaas.GlobusPrincipal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Required;
@@ -101,6 +102,7 @@ import org.dcache.namespace.FileAttribute;
 import org.dcache.namespace.FileType;
 import org.dcache.namespace.ListHandler;
 import org.dcache.namespace.PermissionHandler;
+import org.dcache.services.login.LoginMessage;
 import org.dcache.util.Args;
 import org.dcache.util.Checksum;
 import org.dcache.util.ChecksumType;
@@ -926,6 +928,28 @@ public class PnfsManagerV3
             CellMessage message = new CellMessage(poolPath, new PoolAcceptFileMessage("pool_write",
                                                                                       new HttpProtocolInfo("HTTP", 1, 0, address, cellName, domainName, path, null),
                                                                                       fileAttributes));
+            message.encode().decode();
+        }
+        return time.toString();
+    }
+
+    public String ac_test_loginmessage_$_2(Args args) throws Exception {
+        String path = args.argv(1);
+        PnfsId pnfsId = _nameSpaceProvider.pathToPnfsid(Subjects.ROOT, path, false);
+        FileAttributes fileAttributes = _nameSpaceProvider.getFileAttributes(Subjects.ROOT, pnfsId, Sets.newHashSet(
+                PoolMgrSelectWritePoolMsg.getRequiredAttributes()));
+        fileAttributes.setAccessLatency(AccessLatency.ONLINE);
+        fileAttributes.setRetentionPolicy(RetentionPolicy.REPLICA);
+
+        int cnt = Integer.parseInt(args.argv(0));
+
+        Stopwatch time = Stopwatch.createStarted();
+        for (int i = 0; i < cnt; i++) {
+            CellPath poolPath = new CellPath("PoolManager");
+            poolPath.add("pool_write");
+            Subject subject = new Subject();
+            subject.getPrincipals().add(new GlobusPrincipal("/O=Grid/O=NorduGrid/OU=ndgf.org/CN=Gerd Behrmann"));
+            CellMessage message = new CellMessage(poolPath, new LoginMessage(subject));
             message.encode().decode();
         }
         return time.toString();

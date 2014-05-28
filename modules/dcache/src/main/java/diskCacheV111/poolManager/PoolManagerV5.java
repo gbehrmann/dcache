@@ -3,10 +3,15 @@ package diskCacheV111.poolManager ;
 import com.google.common.collect.ImmutableBiMap;
 import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import de.ruedigermoeller.serialization.FSTObjectInput;
+import de.ruedigermoeller.serialization.FSTObjectOutput;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.PrintWriter;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -765,5 +770,22 @@ public class PoolManagerV5
 
     	return sb.toString();
 
+    }
+
+    public String ac_test_poolmonitor_$_0(Args args) throws Exception
+    {
+        try {
+            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+            FSTObjectOutput out = new FSTObjectOutput(buffer);
+//            out.writeObject(_selectionUnit.getLinks().get("regular-write-link"));
+            out.writeObject(InetAddress.getByName("::1"));
+            out.close();
+            FSTObjectInput stream = new FSTObjectInput(new ByteArrayInputStream(buffer.toByteArray()));
+            stream.readObject();
+            return "";
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw e;
+        }
     }
 }
