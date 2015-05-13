@@ -114,6 +114,7 @@ public class LocationMgrTunnel
                 throw new IOException("Connection from dCache older than 2.6 rejected.");
             }
             short remoteRelease = Releases.getRelease(version);
+            String remoteEncoding;
             if (remoteRelease < Releases.RELEASE_2_10) {
                 throw new IOException("Connection from dCache older than 2.10 rejected.");
             } else if (remoteRelease < Releases.RELEASE_2_13) {
@@ -123,13 +124,32 @@ public class LocationMgrTunnel
                 _log.debug("Using Java serialization for message envelope.");
                 _input = new JavaObjectSource(in);
                 _output = new JavaObjectSink(out);
+                remoteEncoding = "0";
             } else {
                 _log.debug("Using raw serialization for message envelope.");
+
+                /* Exchange message encoding version.
+                 */
+                out.writeUTF(CellMessage.ENCODING_VERSION);
+                out.flush();
+                remoteEncoding = in.readUTF();
+
+                _log.debug("{} uses payload encoding {}.", getRemoteDomainName(), remoteEncoding);
 
                 /* Since dCache 2.13 we use raw encoding of CellMessage.
                  */
                 _input = new RawObjectSource(_rawIn);
                 _output = new RawObjectSink(_rawOut);
+            }
+            /* If the encoding versions do not match, we use Java Serialization for
+             * CellMessage payload. Otherwise we use the internal CellMessage FST
+             * encoding.
+             */
+            if (!CellMessage.ENCODING_VERSION.equals(remoteEncoding)) {
+                _input = new ReencodingObjectSource(_input);
+                _output = new ReencodingObjectSink(_output);
+                _log.warn("{} uses incompatible payload encoding {}. Falling back to slower Java serialization.",
+                          getRemoteDomainName(), remoteEncoding);
             }
             _log.info("Established connection with {} version {}.", getRemoteDomainName(), version);
         } catch (ClassNotFoundException e) {
@@ -421,6 +441,38 @@ public class LocationMgrTunnel
         public CellMessage readObject() throws IOException, ClassNotFoundException
         {
             return CellMessage.createFrom(in);
+        }
+    }
+
+    private static class ReencodingObjectSink implements ObjectSink
+    {
+        private final ObjectSink out;
+
+        private ReencodingObjectSink(ObjectSink out)
+        {
+            this.out = out;
+        }
+
+        @Override
+        public void writeObject(CellMessage message) throws IOException
+        {
+            out.writeObject(message.decode().encodeJava());
+        }
+    }
+
+    private static class ReencodingObjectSource implements ObjectSource
+    {
+        private final ObjectSource in;
+
+        private ReencodingObjectSource(ObjectSource in)
+        {
+            this.in = in;
+        }
+
+        @Override
+        public CellMessage readObject() throws IOException, ClassNotFoundException
+        {
+            return in.readObject().decodeJava().encode();
         }
     }
 }

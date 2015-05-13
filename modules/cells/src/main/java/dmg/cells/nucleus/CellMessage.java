@@ -2,6 +2,10 @@ package dmg.cells.nucleus ;
 
 import com.google.common.base.Strings;
 import com.google.common.base.Throwables;
+import com.google.common.base.Strings;
+import de.ruedigermoeller.serialization.FSTConfiguration;
+import de.ruedigermoeller.serialization.FSTObjectInput;
+import de.ruedigermoeller.serialization.FSTObjectOutput;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -36,6 +40,26 @@ public class CellMessage implements Cloneable , Serializable {
    * Maximum TTL adjustment as a fraction of TTL.
    */
   private static final float TTL_BUFFER_FRACTION = 0.10f;
+
+  /**
+   * Configuration object for the FST fast serialization library.
+   */
+  private static final FSTConfiguration fstConfiguration = FSTConfiguration.createDefaultConfiguration();
+
+    /**
+   * Payload encoding version.
+   *
+   * The payload is encoded using FST, a fast-serialization library.
+   *
+   * This encoding does not allow versioning, which means that ANY change to fields
+   * of serializable classes used in payload causes the serialization format
+   * to break.
+   *
+   * This version field must be changed whenever we break incompatibility. When the
+   * encoding versions do not match, cell message tunnels reencode the payload using
+   * Java Serialization. Java Serialization does support versioning.
+   */
+  public static final String ENCODING_VERSION = "1";
 
   private CellPath    _source , _destination ;
   private Object      _message ;
@@ -174,7 +198,7 @@ public boolean equals( Object obj ){
         CellMessage encoded = clone();
         encoded._mode = STREAM_MODE;
         encoded._message = null;
-        encoded._messageStream = encode(_message);
+        encoded.setPayload(_message);
         return encoded;
     }
 
@@ -184,39 +208,11 @@ public boolean equals( Object obj ){
         CellMessage decoded = clone();
         decoded._mode = ORIGINAL_MODE;
         decoded._messageStream = null;
-        decoded._message = decode(_messageStream);
+        decoded._message = getPayload();
         return decoded;
     }
 
-    protected static byte[] encode(Object message)
-    {
-        int initialBufferSize = 256;
-        ByteArrayOutputStream array = new ByteArrayOutputStream(initialBufferSize);
-        try (ObjectOutputStream out = new ObjectOutputStream(array)) {
-            out.writeObject(message);
-        } catch (InvalidClassException e) {
-            throw new SerializationException("Failed to serialize object: "
-                    + e + "(this is usually a bug)", e);
-        } catch (NotSerializableException e) {
-            throw new SerializationException("Failed to serialize object because the object is not serializable (this is usually a bug)", e);
-        } catch (IOException e) {
-            throw new SerializationException("Failed to serialize object: " + e, e);
-        }
-        return array.toByteArray();
-    }
-
-    protected static Object decode(byte[] messageStream)
-    {
-        try (ObjectInputStream stream = new ObjectInputStream(new ByteArrayInputStream(messageStream))) {
-            return stream.readObject();
-        } catch (ClassNotFoundException e) {
-            throw new SerializationException("Failed to deserialize object: The class could not be found. Is there a software version mismatch in your installation?", e);
-        } catch (IOException e) {
-            throw new SerializationException("Failed to deserialize object: " + e, e);
-        }
-    }
-
-    public void addSourceAddress( CellAddressCore source ){
+   public void addSourceAddress( CellAddressCore source ){
       _source.add(source) ;
   }
 
@@ -291,5 +287,73 @@ public boolean equals( Object obj ){
         message._messageStream = new byte[len];
         in.readFully(message._messageStream);
         return message;
+    }
+
+    public CellMessage encodeJava() throws IOException
+    {
+        checkState(!isStreamMode());
+        ByteArrayOutputStream array = new ByteArrayOutputStream();
+        try (ObjectOutputStream out = new ObjectOutputStream(array)) {
+            out.writeObject(_message);
+        } catch (InvalidClassException e) {
+            throw new SerializationException("Failed to serialize object: "
+                                                     + e + "(this is usually a bug)", e);
+        } catch (NotSerializableException e) {
+            throw new SerializationException("Failed to serialize object because the object is not serializable (this is usually a bug)", e);
+        }
+        CellMessage encoded = clone();
+        encoded._messageStream = array.toByteArray();
+        encoded._message = null;
+        encoded._mode = STREAM_MODE;
+        return encoded;
+    }
+
+    public CellMessage decodeJava() throws IOException
+    {
+        checkState(isStreamMode());
+        ByteArrayInputStream in = new ByteArrayInputStream(_messageStream);
+        try (ObjectInputStream stream = new ObjectInputStream(in)) {
+            CellMessage decoded = clone();
+            decoded._messageStream = null;
+            decoded._message = stream.readObject();
+            decoded._mode = ORIGINAL_MODE;
+            return decoded;
+        } catch (ClassNotFoundException e) {
+            throw new SerializationException(
+                    "Failed to deserialize object: The class could not be found. Is there a software version mismatch in your installation?",
+                    e);
+        }
+    }
+
+    private void setPayload(Object object)
+    {
+        try {
+            FSTObjectOutput out = fstConfiguration.getObjectOutput();
+            out.writeObject(object);
+            _messageStream = out.getCopyOfWrittenBuffer();
+            _mode = STREAM_MODE;
+        } catch (InvalidClassException e) {
+            throw new SerializationException("Failed to serialize object: "
+                                                     + e + "(this is usually a bug)", e);
+        } catch (NotSerializableException e) {
+            throw new SerializationException("Failed to serialize object because the object is not serializable (this is usually a bug)", e);
+        } catch (IOException e) {
+            throw new SerializationException("Failed to serialize object: " + e, e);
+        }
+    }
+
+    private Object getPayload()
+    {
+        checkState(isStreamMode());
+        try {
+            FSTObjectInput stream = fstConfiguration.getObjectInput(_messageStream);
+            return stream.readObject();
+        } catch (ClassNotFoundException e) {
+            throw new SerializationException(
+                    "Failed to deserialize object: The class could not be found. Is there a software version mismatch in your installation?",
+                    e);
+        } catch (IOException e) {
+            throw new SerializationException("Failed to deserialize object: " + e, e);
+        }
     }
 }
