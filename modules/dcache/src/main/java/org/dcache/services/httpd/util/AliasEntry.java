@@ -17,6 +17,7 @@ public class AliasEntry
         REDIRECT("redirect"),
         ENGINE("class"),
         WEBAPP("webapp"),
+        SERVLET("servlet"),
         BADCONFIG("badconfig");
 
         private final String type;

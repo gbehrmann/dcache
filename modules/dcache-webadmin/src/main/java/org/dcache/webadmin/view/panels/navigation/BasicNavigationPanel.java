@@ -4,7 +4,6 @@ import com.google.common.collect.ImmutableList;
 import org.apache.wicket.AttributeModifier;
 import org.apache.wicket.Component;
 import org.apache.wicket.behavior.AttributeAppender;
-import org.apache.wicket.markup.html.WebMarkupContainer;
 import org.apache.wicket.markup.html.basic.Label;
 import org.apache.wicket.markup.html.link.BookmarkablePageLink;
 import org.apache.wicket.markup.html.link.Link;
@@ -22,6 +21,7 @@ import org.dcache.webadmin.view.beans.WebAdminInterfaceSession;
 import org.dcache.webadmin.view.pages.AuthenticatedWebPage;
 import org.dcache.webadmin.view.pages.activetransfers.ActiveTransfersPage;
 import org.dcache.webadmin.view.pages.alarms.AlarmsPage;
+import org.dcache.webadmin.view.pages.ansiterm.AnsiTermPage;
 import org.dcache.webadmin.view.pages.basepage.BasePage;
 import org.dcache.webadmin.view.pages.billingplots.BillingPlots;
 import org.dcache.webadmin.view.pages.celladmin.CellAdmin;
@@ -67,6 +67,7 @@ public class BasicNavigationPanel extends BasePanel {
             add(NavLink.builder().to(CellAdmin.class).withId("celladmin")).
             add(NavLink.builder().to(SpaceTokens.class).withId("space")).
             add(NavLink.builder().to(AlarmsPage.class).withId("alarms")).
+            add(NavLink.builder().to(AnsiTermPage.class).withId("shell")).
             build();
 
     private static String billingDisableHint;

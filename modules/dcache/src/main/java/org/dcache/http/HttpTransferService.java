@@ -38,10 +38,8 @@ import java.util.UUID;
 import diskCacheV111.util.CacheException;
 import diskCacheV111.vehicles.HttpDoorUrlInfoMessage;
 import diskCacheV111.vehicles.HttpProtocolInfo;
-
 import dmg.cells.nucleus.CellAddressCore;
 import dmg.cells.nucleus.CellPath;
-
 import org.dcache.pool.movers.NettyMover;
 import org.dcache.pool.movers.NettyTransferService;
 import org.dcache.util.NetworkUtils;

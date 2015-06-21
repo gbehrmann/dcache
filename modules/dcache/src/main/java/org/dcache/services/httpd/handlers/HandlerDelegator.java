@@ -11,7 +11,6 @@ import org.slf4j.LoggerFactory;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Map;
@@ -19,7 +18,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import dmg.util.HttpBasicAuthenticationException;
 import dmg.util.HttpException;
-
 import org.dcache.services.httpd.exceptions.OnErrorException;
 import org.dcache.services.httpd.util.AliasEntry;
 

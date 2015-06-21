@@ -1,0 +1,26 @@
+<html>
+<head>
+    <title><wicket:message key="title"></wicket:message></title>
+    <wicket:head>
+        <wicket:link>
+            <link
+                href="AnsiTerm.css"
+                rel="stylesheet"
+                type="text/css" />
+        </wicket:link>
+    </wicket:head>
+</head>
+<body>
+    <wicket:extend>
+        <h1>
+            <wicket:message key="title"></wicket:message>
+        </h1>
+        <hr/>
+        <p />
+        <p id="server" wicket:id="url">connectUrl</p>
+        <p id="rows" wicket:id="rows"></p>
+        <p id="cols" wicket:id="cols"></p>
+        <div id="term"/>
+    </wicket:extend>
+</body>
+</html>

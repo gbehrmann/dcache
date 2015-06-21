@@ -26,7 +26,6 @@ import java.util.List;
 
 import dmg.cells.nucleus.CellEndpoint;
 import dmg.cells.nucleus.CellPath;
-
 import org.dcache.auth.LoginStrategy;
 import org.dcache.cells.CellStub;
 import org.dcache.services.login.RemoteLoginStrategy;
@@ -52,6 +51,7 @@ import org.dcache.webadmin.view.beans.WebAdminInterfaceSession;
 import org.dcache.webadmin.view.pages.AuthenticatedWebPage;
 import org.dcache.webadmin.view.pages.activetransfers.ActiveTransfersPage;
 import org.dcache.webadmin.view.pages.alarms.AlarmsPage;
+import org.dcache.webadmin.view.pages.ansiterm.AnsiTermPage;
 import org.dcache.webadmin.view.pages.billingplots.BillingPlots;
 import org.dcache.webadmin.view.pages.celladmin.CellAdmin;
 import org.dcache.webadmin.view.pages.cellservices.CellServices;
@@ -105,9 +105,12 @@ public class WebAdminInterface extends WebApplication {
     private int _adminGid;
     private int _httpsPort;
     private int _httpPort;
+
     private boolean _generatePlots = false;
     private boolean _poolQueuePlotsEnabled = false;
     private boolean _authenticatedMode = false;
+    private int terminalRows;
+    private int terminalCols;
 
     public ActiveTransfersService getActiveTransfersService() {
         return _activeTransfersService;
@@ -144,6 +147,14 @@ public class WebAdminInterface extends WebApplication {
     @Override
     public Class<? extends Page> getHomePage() {
         return DCacheServices.class;
+    }
+
+    public int getHttpsPort() {
+        return _httpsPort;
+    }
+
+    public int getHttpPort() {
+        return _httpPort;
     }
 
     public InfoService getInfoService() {
@@ -358,6 +369,7 @@ public class WebAdminInterface extends WebApplication {
         mountPage("poolinfo", PoolSelectionSetup.class);
         mountPage("tapetransfers", TapeTransferQueue.class);
         mountPage("alarms", AlarmsPage.class);
+        mountPage("shell", AnsiTermPage.class);
 
         if (_generatePlots) {
             _billingService.initialize();
@@ -431,5 +443,21 @@ public class WebAdminInterface extends WebApplication {
         compoundStrategy.add(simplePageStrategy);
         compoundStrategy.add(roleStrategy);
         getSecuritySettings().setAuthorizationStrategy(compoundStrategy);
+    }
+
+    public void setTerminalRows(int terminalRows) {
+        this.terminalRows = terminalRows;
+    }
+
+    public int getTerminalRows() {
+        return terminalRows;
+    }
+
+    public void setTerminalCols(int terminalCols) {
+        this.terminalCols = terminalCols;
+    }
+
+    public int getTerminalCols() {
+        return terminalCols;
     }
 }

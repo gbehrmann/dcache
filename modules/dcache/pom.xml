@@ -165,6 +165,15 @@
         <artifactId>jetty-rewrite</artifactId>
     </dependency>
     <dependency>
+      <groupId>org.eclipse.jetty.websocket</groupId>
+      <artifactId>websocket-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.jetty.websocket</groupId>
+      <artifactId>websocket-server</artifactId>
+    </dependency>
+
+    <dependency>
         <groupId>org.antlr</groupId>
         <artifactId>ST4</artifactId>
     </dependency>

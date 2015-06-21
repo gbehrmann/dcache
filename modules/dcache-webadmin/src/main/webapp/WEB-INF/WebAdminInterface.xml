@@ -333,6 +333,8 @@
         <property name="poolQueuePlotsEnabled" value="${httpd.enable.plots.pool-queue}"/>
         <property name="httpPort" value="${httpd.net.port}"/>
         <property name="httpsPort" value="${httpd.net.https-port}"/>
+        <property name="terminalRows" value="${httpd.admin.terminal.rows}"/>
+        <property name="terminalCols" value="${httpd.admin.terminal.cols}"/>
     </bean>
 
     <beans profile="alarms-rdbms">
@@ -353,7 +355,7 @@
             </constructor-arg>
         </bean>
 
-        <bean id="pmf" class="org.datanucleus.api.jdo.JDOPersistenceManagerFactory"
+        <bean id="pmf1" class="org.datanucleus.api.jdo.JDOPersistenceManagerFactory"
               destroy-method="close">
             <description>Database persistence manager</description>
             <constructor-arg>
@@ -365,12 +367,12 @@
         </bean>
 
         <bean id="alarmStore" class="org.dcache.webadmin.model.dataaccess.impl.DataNucleusAlarmStore">
-            <property name="persistenceManagerFactory" ref="pmf"/>
+            <property name="persistenceManagerFactory" ref="pmf1"/>
         </bean>
     </beans>
 
     <beans profile="alarms-xml">
-        <bean id="pmf" class="org.datanucleus.api.jdo.JDOPersistenceManagerFactory"
+        <bean id="pmf2" class="org.datanucleus.api.jdo.JDOPersistenceManagerFactory"
               destroy-method="close">
             <description>Database persistence manager</description>
             <constructor-arg>
@@ -382,7 +384,7 @@
         </bean>
 
         <bean id="alarmStore" class="org.dcache.webadmin.model.dataaccess.impl.DataNucleusAlarmStore">
-            <property name="persistenceManagerFactory" ref="pmf"/>
+            <property name="persistenceManagerFactory" ref="pmf2"/>
         </bean>
     </beans>
 

@@ -2,12 +2,15 @@ package org.dcache.services.httpd;
 
 import com.google.common.base.Joiner;
 import org.eclipse.jetty.server.Handler;
+import org.eclipse.jetty.servlet.ServletContextHandler;
+import org.eclipse.jetty.servlet.ServletHolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Required;
 import org.springframework.beans.factory.config.AutowireCapableBeanFactory;
 
+import javax.servlet.http.HttpServlet;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.lang.reflect.Constructor;
@@ -16,7 +19,6 @@ import java.util.NoSuchElementException;
 
 import dmg.cells.nucleus.CellCommandListener;
 import dmg.util.HttpResponseEngine;
-
 import org.dcache.services.httpd.handlers.BadConfigHandler;
 import org.dcache.services.httpd.handlers.ContextHandler;
 import org.dcache.services.httpd.handlers.HandlerDelegator;
@@ -72,7 +74,8 @@ public class HttpdCommandLineInterface
             + "   class              <fullClassName> <...>\n"
             + "   context            [options] <context> or  <contextNameStart>*\n"
             + "                       options : -overwrite=<alias> -onError=<alias>\n"
-            + "   webapp             <warPath> <...> \n"
+            + "   webapp             <warPath> <...>\n"
+            + "   servlet            <fullClassName>\n"
             + "   redirect           <forward-to-context>\n"
             + "   predefined alias : <home>    =  default for http://host:port/ \n"
             + "                      <default> =  default for any type or error \n";
@@ -158,6 +161,30 @@ public class HttpdCommandLineInterface
             entry = new AliasEntry(alias, aliasType, handler, specific);
             entry.setStatusMessage(alias + " -> " + aliasType.getType() + "(" + args + ")");
             break;
+        case SERVLET:
+            failure = null;
+            String path = "/" + alias;
+
+            try {
+                ServletContextHandler context = new ServletContextHandler(ServletContextHandler.SESSIONS);
+                context.setContextPath("/");
+                /*
+                 *  Assumes a bean with servlet name.
+                 */
+                HttpServlet servlet = (HttpServlet)beanFactory.getBean(specific);
+                context.addServlet(new ServletHolder(servlet), path);
+                handler = context;
+            } catch (Exception e) {
+                logger.error(e.toString());
+                handler = new BadConfigHandler();
+                aliasType = AliasType.BADCONFIG;
+                failure = "failed to load class " + specific;
+            }
+
+            entry = new AliasEntry(alias, aliasType, handler, specific);
+            entry.setIntFailureMsg(failure);
+            entry.setStatusMessage(alias + " -> " + aliasType.getType() + "(" + specific + ")");
+            break;
         default:
             handler = new BadConfigHandler();
             entry = new AliasEntry(alias, aliasType, handler, specific);
@@ -168,6 +195,7 @@ public class HttpdCommandLineInterface
         if (handler instanceof BadConfigHandler) {
             ((BadConfigHandler) handler).setFailureMessage(entry.getIntFailureMsg());
         }
+
         return entry;
     }
 }

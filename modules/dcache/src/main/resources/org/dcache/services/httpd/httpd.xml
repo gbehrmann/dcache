@@ -19,6 +19,44 @@
         <property name="excludedDestinations" value="${httpd.loginbroker.request-topic}"/>
     </bean>
 
+    <bean id="pnfsmanager" class="org.dcache.cells.CellStub">
+        <property name="destination" value="${admin.service.pnfsmanager}"/> <!-- TODO change properties -->
+        <property name="timeout" value="${admin.service.pnfsmanager.timeout}"/>
+        <property name="timeoutUnit" value="${admin.service.pnfsmanager.timeout.unit}"/>
+    </bean>
+
+    <bean id="poolmanager" class="org.dcache.cells.CellStub">
+        <property name="destination" value="${admin.service.poolmanager}"/> <!-- TODO change properties -->
+        <property name="timeout" value="${admin.service.poolmanager.timeout}"/>
+        <property name="timeoutUnit" value="${admin.service.poolmanager.timeout.unit}"/>
+    </bean>
+
+    <bean id="acm" class="org.dcache.cells.CellStub">
+        <property name="destination" value="${admin.service.acm}"/> <!-- TODO change properties -->
+        <property name="timeout" value="${admin.service.acm.timeout}"/>
+        <property name="timeoutUnit" value="${admin.service.acm.timeout.unit}"/>
+    </bean>
+
+    <bean id="adminTerminalFactory" class="org.dcache.services.httpd.adminshell.AdminTerminalFactory">
+        <property name="prompt" value="${admin.prompt}"/>  <!-- TODO change properties -->
+        <property name="historyFile" value="${admin.paths.history}"/>
+        <property name="useColor" value="${admin.enable.colors}"/>
+        <property name="acm" ref ="acm"/>
+        <property name="pnfsManager" ref="pnfsmanager"/>
+        <property name="poolManager" ref="poolmanager"/>
+        <property name="listHandler">
+            <bean class="org.dcache.util.list.ListDirectoryHandler">
+                <constructor-arg>
+                    <bean class="diskCacheV111.util.PnfsHandler">
+                        <constructor-arg ref="pnfsmanager"/>
+                    </bean>
+                </constructor-arg>
+            </bean>
+        </property>
+        <property name="height" value="${httpd.admin.terminal.rows}"/>
+        <property name="width" value="${httpd.admin.terminal.cols}"/>
+    </bean>
+
     <bean id="cli" class="org.dcache.services.httpd.HttpdCommandLineInterface">
         <property name="delegator" ref="delegator"/>
     </bean>
@@ -30,6 +68,10 @@
     </bean>
 
     <bean id="delegator" class="org.dcache.services.httpd.handlers.HandlerDelegator"/>
+
+    <bean id="admin-shell-servlet" class="org.dcache.services.httpd.adminshell.AdminShellServlet">
+        <property name="terminalFactory" ref="adminTerminalFactory"/>
+    </bean>
 
     <bean id="webapp-handler" class="org.dcache.services.httpd.handlers.WebAppHandler" scope="prototype">
         <property name="defaultsDescriptor" value="${httpd.container.default-webapp}"/>

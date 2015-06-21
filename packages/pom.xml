@@ -164,7 +164,7 @@
         <scope>runtime</scope>
     </dependency>
 
-      <!-- Dependencies of a WAR artifact are not automatically
+    <!-- Dependencies of a WAR artifact are not automatically
            included, so we have to repeat them here. There is a plugin
            (org.appfuse:maven-warpath-plugin) to solve
            that (REVISIT). -->
@@ -187,6 +187,14 @@
     <dependency>
         <groupId>org.apache.wicket</groupId>
         <artifactId>wicket-datetime</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.jetty.websocket</groupId>
+      <artifactId>websocket-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.jetty.websocket</groupId>
+      <artifactId>websocket-server</artifactId>
     </dependency>
   </dependencies>
 

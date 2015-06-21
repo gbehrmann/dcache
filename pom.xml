@@ -116,6 +116,10 @@
 
     <repositories>
         <repository>
+            <id>maven.central</id>
+            <url>http://search.maven.org</url>
+        </repository>
+        <repository>
             <id>dcache.repository</id>
             <url>https://download.dcache.org/nexus/content/groups/public</url>
         </repository>
@@ -444,6 +448,16 @@
                 <artifactId>jetty-rewrite</artifactId>
                 <version>${version.jetty}</version>
             </dependency>
+            <dependency>
+                <groupId>org.eclipse.jetty.websocket</groupId>
+                <artifactId>websocket-api</artifactId>
+                <version>${version.jetty}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.jetty.websocket</groupId>
+                <artifactId>websocket-server</artifactId>
+                <version>${version.jetty}</version>
+            </dependency>
 
             <dependency>
                 <groupId>javax.ws.rs</groupId>
@@ -596,6 +610,7 @@
                 <artifactId>wicket-datetime</artifactId>
                 <version>${version.wicket}</version>
             </dependency>
+
             <dependency>
                 <groupId>com.h2database</groupId>
                 <artifactId>h2</artifactId>

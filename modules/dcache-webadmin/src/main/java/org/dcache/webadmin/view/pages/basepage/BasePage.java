@@ -119,14 +119,14 @@ public abstract class BasePage extends WebPage {
      * add its own specific rendering.
      */
     protected void renderHeadInternal(IHeaderResponse response) {
+        response.render(StringHeaderItem.forString(META_GENERATOR_TAG));
+        response.render(StringHeaderItem.forString(META_VERSION_TAG));
         response.render(JavaScriptHeaderItem.forReference(getApplication()
                         .getJavaScriptLibrarySettings()
                         .getJQueryReference()));
         response.render(JavaScriptHeaderItem.forUrl("js/infobox.js"));
 	    response.render(JavaScriptHeaderItem.forScript("CLOSURE_NO_DEPS = true;",
                         "nodeps"));
-        response.render(StringHeaderItem.forString(META_GENERATOR_TAG));
-        response.render(StringHeaderItem.forString(META_VERSION_TAG));
     }
 
     protected Form<?> getAutoRefreshingForm(String name) {
