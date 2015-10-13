@@ -40,9 +40,10 @@ import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
 
 import diskCacheV111.util.CacheException;
 import diskCacheV111.util.HsmRunSystem;
@@ -55,10 +56,10 @@ import org.dcache.pool.nearline.spi.RemoveRequest;
 import org.dcache.pool.nearline.spi.StageRequest;
 import org.dcache.util.BoundedExecutor;
 import org.dcache.util.CDCExecutorServiceDecorator;
+import org.dcache.util.CDCScheduledExecutorServiceDecorator;
 import org.dcache.util.Checksum;
 import org.dcache.vehicles.FileAttributes;
 
-import static com.google.common.collect.Lists.newArrayList;
 import static java.util.Arrays.asList;
 
 /**
@@ -73,14 +74,19 @@ public class ScriptNearlineStorage extends AbstractBlockingNearlineStorage
             LoggerFactory.getLogger(ScriptNearlineStorage.class);
 
     private static final int MAX_LINES = 200;
+
     public static final String COMMAND = "command";
     public static final String CONCURRENT_PUTS = "c:puts";
     public static final String CONCURRENT_GETS = "c:gets";
     public static final String CONCURRENT_REMOVES = "c:removes";
+    public static final String POLLING_DELAY = "p:delay";
+
     private static final int DEFAULT_FLUSH_THREADS = 100;
     private static final int DEFAULT_STAGE_THREADS = 100;
     private static final int DEFAULT_REMOVE_THREADS = 1;
-    private static final Collection<String> PROPERTIES = asList(COMMAND, CONCURRENT_PUTS, CONCURRENT_GETS, CONCURRENT_REMOVES);
+    private static final Collection<String> PROPERTIES = asList(COMMAND, CONCURRENT_PUTS, CONCURRENT_GETS, CONCURRENT_REMOVES,
+                                                                POLLING_DELAY);
+    private static final long DEFAULT_RETRY_DELAY = TimeUnit.MINUTES.toMillis(1);
 
     private final ExecutorService executor = Executors.newCachedThreadPool();
     private final CDCExecutorServiceDecorator<BoundedExecutor> flushExecutor =
@@ -89,13 +95,17 @@ public class ScriptNearlineStorage extends AbstractBlockingNearlineStorage
             new CDCExecutorServiceDecorator<>(new BoundedExecutor(executor, DEFAULT_STAGE_THREADS));
     private final CDCExecutorServiceDecorator<BoundedExecutor> removeExecutor =
             new CDCExecutorServiceDecorator<>(new BoundedExecutor(executor, DEFAULT_REMOVE_THREADS));
+    private final CDCScheduledExecutorServiceDecorator<ScheduledThreadPoolExecutor> scheduledExecutor =
+            new CDCScheduledExecutorServiceDecorator<>(new ScheduledThreadPoolExecutor(1));
 
     private volatile String command;
     private volatile List<String> options;
+    private volatile long retryDelay;
 
     public ScriptNearlineStorage(String type, String name)
     {
         super(type, name);
+        scheduledExecutor.delegate().setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
     }
 
     @Override
@@ -114,6 +124,12 @@ public class ScriptNearlineStorage extends AbstractBlockingNearlineStorage
     protected Executor getRemoveExecutor()
     {
         return removeExecutor;
+    }
+
+    @Override
+    protected void retry(Runnable runnable)
+    {
+        scheduledExecutor.schedule(runnable, retryDelay, TimeUnit.MILLISECONDS);
     }
 
     @Override
@@ -161,12 +177,17 @@ public class ScriptNearlineStorage extends AbstractBlockingNearlineStorage
         if (!properties.containsKey(COMMAND)) {
             throw new IllegalArgumentException("command option must be defined");
         }
+
         command = buildCommand(properties);
         options = buildOptions(properties);
 
         configureThreadPoolSize(flushExecutor.delegate(), properties.get(CONCURRENT_PUTS), 1);
         configureThreadPoolSize(stageExecutor.delegate(), properties.get(CONCURRENT_GETS), 1);
         configureThreadPoolSize(removeExecutor.delegate(), properties.get(CONCURRENT_REMOVES), 1);
+
+        retryDelay = properties.containsKey(POLLING_DELAY)
+                     ? TimeUnit.SECONDS.toMillis(Integer.parseInt(properties.get(POLLING_DELAY)))
+                     : DEFAULT_RETRY_DELAY;
     }
 
     @Override
@@ -257,8 +278,9 @@ public class ScriptNearlineStorage extends AbstractBlockingNearlineStorage
     private List<String> buildOptions(Map<String, String> properties)
     {
         return properties.entrySet().stream()
-                .filter(property -> !PROPERTIES.contains(property))
-                .map(entry -> "-" + entry.getKey() + (Strings.isNullOrEmpty(entry.getValue()) ? "" : "="+entry.getValue()))
+                .filter(entry -> !PROPERTIES.contains(entry.getKey()))
+                .map(entry -> "-" + entry.getKey() + (Strings.isNullOrEmpty(
+                        entry.getValue()) ? "" : "=" + entry.getValue()))
                 .collect(Collectors.toList());
     }
 }
