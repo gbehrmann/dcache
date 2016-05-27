@@ -3,13 +3,13 @@ package org.dcache.webdav;
 import com.google.common.base.Objects;
 import com.google.common.base.Splitter;
 import com.google.common.base.Strings;
+import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Range;
 import com.google.common.collect.Sets;
 import com.google.common.io.ByteStreams;
-import com.google.common.net.InetAddresses;
 import io.milton.http.HttpManager;
 import io.milton.http.Request;
 import io.milton.http.ResourceFactory;
@@ -100,6 +100,7 @@ import org.dcache.util.list.ListDirectoryHandler;
 import org.dcache.vehicles.FileAttributes;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.net.InetAddresses.forString;
 import static java.util.Arrays.asList;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.dcache.namespace.FileAttribute.*;
@@ -171,6 +172,7 @@ public class DcacheResourceFactory
     private PnfsHandler _pnfs;
     private String _ioQueue;
     private PathMapper _pathMapper;
+    private int _staticContentPort;
     private List<FsPath> _allowedPaths =
         Collections.singletonList(FsPath.ROOT);
     private InetAddress _internalAddress;
@@ -325,6 +327,12 @@ public class DcacheResourceFactory
     public void setPathMapper(PathMapper mapper)
     {
         _pathMapper = mapper;
+    }
+
+    @Required
+    public void setStaticContentPort(int staticPort)
+    {
+        _staticContentPort = staticPort;
     }
 
     /**
@@ -527,7 +535,7 @@ public class DcacheResourceFactory
             throws IllegalArgumentException, UnknownHostException
     {
         if (!Strings.isNullOrEmpty(ipString)) {
-            InetAddress address = InetAddresses.forString(ipString);
+            InetAddress address = forString(ipString);
             if (address.isAnyLocalAddress()) {
                 throw new IllegalArgumentException("Wildcard address is not a valid local address: " + address);
             }
@@ -854,15 +862,23 @@ public class DcacheResourceFactory
 
     private void addTemplateAttributes(ST template)
     {
-        String requestPath = getRequestPath();
-        String[] base =
-            Iterables.toArray(PATH_SPLITTER.split(requestPath), String.class);
+        try {
+            String requestPath = getRequestPath();
+            String[] base =
+                Iterables.toArray(PATH_SPLITTER.split(requestPath), String.class);
 
-        template.add("path", asList(UrlPathWrapper.forPaths(base)));
-        template.add("static", _staticContentPath);
-        template.add("subject", new SubjectWrapper(getSubject()));
-        template.add("base", UrlPathWrapper.forEmptyPath());
-        template.add("config", _templateConfig);
+            HttpServletRequest servletRequest = ServletRequest.getRequest();
+            URI staticContentUri = new URI(servletRequest.getScheme(), null, servletRequest.getServerName(), _staticContentPort, _staticContentPath, null, null);
+
+            template.add("path", asList(UrlPathWrapper.forPaths(base)));
+            template.add("static", staticContentUri);
+            template.add("subject", new SubjectWrapper(getSubject()));
+            template.add("base", UrlPathWrapper.forEmptyPath());
+            template.add("config", _templateConfig);
+        } catch (URISyntaxException e) {
+            // Shouldn't be possible
+            throw Throwables.propagate(e);
+        }
     }
 
     /**

@@ -186,11 +186,12 @@
       <property name="internalAddress" value="${webdav.net.internal}"/>
       <property name="templateResource" value="${webdav.templates.html}"/>
       <property name="templateConfig" ref="template-config"/>
-      <property name="staticContentPath" value="${webdav.static-content.uri}"/>
+      <property name="staticContentPath" value="${webdav.static-content.location}"/>
       <property name="redirectOnReadEnabled" value="${webdav.redirect.on-read}"/>
       <property name="redirectOnWriteEnabled" value="${webdav.redirect.on-write}"/>
       <property name="overwriteAllowed" value="${webdav.enable.overwrite}"/>
       <property name="poolMonitor" ref="pool-monitor"/>
+      <property name="staticContentPort" value="${webdav.net.static-port}"/>
   </bean>
 
     <bean id="http-manager" class="org.dcache.webdav.HttpManagerFactory">
@@ -213,123 +214,80 @@
         <property name="enableCookieAuth" value="false"/>
         <property name="resourceFactory" ref="resource-factory"/>
         <property name="buffering" value="never"/>
-        <property name="staticContentPath" value="${webdav.static-content.uri}"/>
+        <property name="staticContentPath" value="${webdav.static-content.location}"/>
+        <property name="staticContentPort" value="${webdav.net.static-port}"/>
         <property name="templateResource" value="${webdav.templates.html}"/>
 	<property name="templateConfig" ref="template-config"/>
     </bean>
 
-    <bean id="handlers" class="org.eclipse.jetty.server.handler.HandlerList">
-      <description>List of handlers for HTTP requests</description>
-      <property name="handlers">
-          <list>
-              <bean class="org.eclipse.jetty.server.handler.ContextHandler">
-                  <property name="contextPath" value="${webdav.static-content.location}"/>
-                  <property name="handler">
-                      <bean class="org.eclipse.jetty.server.handler.ResourceHandler">
-                          <property name="directoriesListed" value="true"/>
-                          <property name="resourceBase" value="${webdav.static-content.dir.local}"/>
-                      </bean>
-                  </property>
-              </bean>
-              <bean class="org.eclipse.jetty.server.handler.ContextHandler">
-                  <property name="contextPath" value="${webdav.static-content.location}"/>
-                  <property name="handler">
-                      <bean class="org.eclipse.jetty.server.handler.ResourceHandler">
-                          <property name="directoriesListed" value="true"/>
-                          <property name="resourceBase" value="${webdav.static-content.dir.default}"/>
-                      </bean>
-                  </property>
-              </bean>
-              <bean class="org.eclipse.jetty.server.handler.ContextHandler">
-                  <property name="contextPath" value="/robots.txt"/>
-                  <property name="allowNullPathInfo" value="true"/>
-                  <property name="handler">
-                      <bean class="org.dcache.services.httpd.handlers.ContextHandler">
-                          <constructor-arg value="robots.txt"/>
-                      </bean>
-                  </property>
-              </bean>
-              <bean class="org.dcache.webdav.owncloud.OwnCloudHandler"/>
-              <bean class="org.dcache.webdav.LoggingHandler">
-                  <property name="handler" ref="authhandler"/>
-              </bean>
-          </list>
-      </property>
-  </bean>
-
-    <bean id="authhandler" class="org.dcache.webdav.AuthenticationHandler">
-        <description>List of handlers for HTTP requests</description>
-        <property name="handler" ref="webdavhandlers"/>
-        <property name="loginStrategy" ref="cache-login-strategy"/>
-        <property name="readOnly" value="${webdav.authz.readonly}"/>
-        <property name="enableBasicAuthentication" value="${webdav.authn.basic}"/>
-        <property name="realm" value="${webdav.authn.realm}"/>
-    </bean>
-
-    <bean id="webdavhandlers" class="org.eclipse.jetty.server.handler.HandlerList">
-        <description>List of handlers for HTTP requests</description>
-        <property name="handlers">
-            <list>
-                <bean class="org.eclipse.jetty.servlet.ServletContextHandler">
-                    <property name="contextPath" value="/api"/>
-                    <property name="servletHandler">
-                        <bean class="org.eclipse.jetty.servlet.ServletHandler">
-                            <property name="servlets">
+    <util:list id="handlers">
+        <bean class="org.dcache.webdav.LocalPortFilterHandler">
+            <property name="port" value="${webdav.net.static-port}"/>
+            <property name="handler">
+                <bean class="org.eclipse.jetty.server.handler.HandlerList">
+                    <property name="handlers" ref="static-handlers"/>
+                </bean>
+            </property>
+        </bean>
+        <bean class="org.eclipse.jetty.server.handler.ContextHandler">
+            <property name="contextPath" value="/robots.txt"/>
+            <property name="allowNullPathInfo" value="true"/>
+            <property name="handler">
+                <bean class="org.dcache.services.httpd.handlers.ContextHandler">
+                    <constructor-arg value="robots.txt"/>
+                </bean>
+            </property>
+        </bean>
+        <bean class="org.dcache.webdav.owncloud.OwnCloudHandler"/>
+        <bean class="org.dcache.webdav.LoggingHandler">
+            <property name="handler">
+                <bean class="org.dcache.webdav.AuthenticationHandler">
+                    <property name="handler">
+                        <bean class="org.eclipse.jetty.server.handler.HandlerList">
+                            <property name="handlers">
                                 <list>
-                                    <bean class="org.eclipse.jetty.servlet.ServletHolder">
-                                        <constructor-arg name="name" value="rest"/>
-                                        <constructor-arg name="servlet">
-                                            <bean class="org.glassfish.jersey.servlet.ServletContainer">
-                                                <constructor-arg name="resourceConfig">
-                                                    <bean class="org.dcache.restful.DcacheRestApplication"/>
-                                                </constructor-arg>
-                                            </bean>
-                                        </constructor-arg>
+                                    <bean class="org.dcache.webdav.RedirectPathHandler">
+                                        <property name="pathMapper" ref="path-mapper"/>
+                                        <property name="uploadPath" value="${webdav.authz.upload-directory}"/>
                                     </bean>
-                                </list>
-                            </property>
-                            <property name="servletMappings">
-                                <list>
-                                    <bean class="org.eclipse.jetty.servlet.ServletMapping">
-                                        <property name="servletName" value="rest"/>
-                                        <property name="pathSpecs">
-                                            <list>
-                                                <value>/v1/*</value>
-                                            </list>
-                                        </property>
+                                    <bean class="org.dcache.webdav.MiltonHandler">
+                                        <property name="httpManager" ref="http-manager"/>
                                     </bean>
+                                    <bean class="org.eclipse.jetty.server.handler.DefaultHandler"/>
                                 </list>
                             </property>
                         </bean>
                     </property>
-                    <property name="attributes">
-                        <bean class="org.dcache.util.jetty.ImmutableAttributesMap">
-                            <constructor-arg>
-                                <map>
-                                    <entry key="#{ T(org.dcache.restful.util.ServletContextHandlerAttributes).DL}"
-                                           value-ref="list-handler"/>
-                                    <entry key="#{ T(org.dcache.restful.util.ServletContextHandlerAttributes).CS}"
-                                           value-ref="pnfs-stub"/>
-                                    <entry key="#{ T(org.dcache.restful.util.ServletContextHandlerAttributes).PM}"
-                                           value-ref= "pool-monitor"/>
+                    <property name="loginStrategy" ref="cache-login-strategy"/>
+                    <property name="readOnly" value="${webdav.authz.readonly}"/>
+                    <property name="enableBasicAuthentication" value="${webdav.authn.basic}"/>
+                    <property name="realm" value="${webdav.authn.realm}"/>
+                </bean>
+            </property>
+        </bean>
+    </util:list>
 
-                                </map>
-                            </constructor-arg>
-                        </bean>
-                    </property>
+    <util:list id="static-handlers">
+        <bean class="org.eclipse.jetty.server.handler.ContextHandler">
+            <property name="contextPath" value="${webdav.static-content.location}"/>
+            <property name="handler">
+                <bean class="org.eclipse.jetty.server.handler.ResourceHandler">
+                    <property name="directoriesListed" value="true"/>
+                    <property name="resourceBase" value="${webdav.static-content.dir.local}"/>
                 </bean>
-                <bean class="org.dcache.webdav.RedirectPathHandler">
-                    <property name="pathMapper" ref="path-mapper"/>
-                    <property name="uploadPath" value="${webdav.authz.upload-directory}"/>
+            </property>
+        </bean>
+        <bean class="org.eclipse.jetty.server.handler.ContextHandler">
+            <property name="contextPath" value="${webdav.static-content.location}"/>
+            <property name="handler">
+                <bean class="org.eclipse.jetty.server.handler.ResourceHandler">
+                    <property name="directoriesListed" value="true"/>
+                    <property name="resourceBase" value="${webdav.static-content.dir.default}"/>
                 </bean>
-                <bean class="org.dcache.webdav.MiltonHandler">
-                    <property name="httpManager" ref="http-manager"/>
-                </bean>
-                <bean class="org.eclipse.jetty.server.handler.DefaultHandler"/>
-            </list>
-        </property>
-    </bean>
-
+            </property>
+        </bean>
+        <ref bean="api-handler"/>
+    </util:list>
 
   <bean id="lb" class="dmg.cells.services.login.LoginBrokerPublisher">
       <description>Registers the door with a LoginBroker</description>
@@ -383,7 +341,12 @@
                      '${webdav.limits.graceful-shutdown.unit}')}"/>
         <property name="connectors">
             <list>
-                <ref bean="server-connector"/>
+                <bean parent="server-connector">
+                    <property name="port" value="${webdav.net.port}"/>
+                </bean>
+                <bean parent="server-connector">
+                    <property name="port" value="${webdav.net.static-port}"/>
+                </bean>
             </list>
         </property>
         <property name="handler">
@@ -404,7 +367,11 @@
                         <property name="headers" ref="custom-headers"/>
                     </bean>
                 </property>
-                <property name="handler" ref="handlers"/>
+                <property name="handler">
+                    <bean class="org.eclipse.jetty.server.handler.HandlerList">
+                        <property name="handlers" ref="handlers"/>
+                    </bean>
+                </property>
             </bean>
         </property>
 
@@ -423,14 +390,13 @@
     </bean>
 
     <beans profile="connector-http">
-        <bean id="server-connector" class="org.eclipse.jetty.server.ServerConnector">
+        <bean id="server-connector" class="org.eclipse.jetty.server.ServerConnector" abstract="true">
             <description>HTTP connector</description>
             <constructor-arg ref="jetty"/>
             <constructor-arg value="${webdav.limits.acceptors}"/>
             <constructor-arg value="-1"/>
 
             <property name="host" value="#{ T(com.google.common.base.Strings).emptyToNull('${webdav.net.listen}') }"/>
-            <property name="port" value="${webdav.net.port}"/>
             <property name="acceptQueueSize" value="${webdav.limits.backlog}"/>
             <property name="idleTimeout"
                       value="#{T(java.util.concurrent.TimeUnit).MILLISECONDS.convert(
@@ -440,13 +406,12 @@
     </beans>
 
     <beans profile="connector-https">
-        <bean id="server-connector" class="org.dcache.util.jetty.CanlConnectorFactoryBean">
+        <bean id="server-connector" class="org.dcache.util.jetty.CanlConnectorFactoryBean" abstract="true">
             <description>HTTPS connector supporting grid certificates</description>
 
             <property name="server" ref="jetty"/>
 
             <property name="host" value="#{ T(com.google.common.base.Strings).emptyToNull('${webdav.net.listen}') }"/>
-            <property name="port" value="${webdav.net.port}"/>
             <property name="backlog" value="${webdav.limits.backlog}"/>
             <property name="idleTimeout" value="${webdav.limits.idle-time}"/>
             <property name="idleTimeoutUnit" value="${webdav.limits.idle-time.unit}"/>
@@ -507,6 +472,83 @@
         <bean id="path-mapper" class="org.dcache.webdav.PathMapper">
             <description>Mapping between request paths and dCache paths</description>
             <property name="rootPath" value="${webdav.root}"/>
+        </bean>
+    </beans>
+
+    <beans profile="api-true">
+        <bean id="api-handler" class="org.dcache.webdav.AuthenticationHandler">
+            <property name="handler">
+                <bean class="org.eclipse.jetty.server.handler.HandlerList">
+                    <property name="handlers">
+                        <list>
+                            <bean class="org.eclipse.jetty.servlet.ServletContextHandler">
+                                <property name="contextPath" value="/api"/>
+                                <property name="servletHandler">
+                                    <bean class="org.eclipse.jetty.servlet.ServletHandler">
+                                        <property name="servlets">
+                                            <list>
+                                                <bean class="org.eclipse.jetty.servlet.ServletHolder">
+                                                    <constructor-arg name="name"
+                                                                     value="rest"/>
+                                                    <constructor-arg name="servlet">
+                                                        <bean class="org.glassfish.jersey.servlet.ServletContainer">
+                                                            <constructor-arg
+                                                                    name="resourceConfig">
+                                                                <bean class="org.dcache.restful.DcacheRestApplication"/>
+                                                            </constructor-arg>
+                                                        </bean>
+                                                    </constructor-arg>
+                                                </bean>
+                                            </list>
+                                        </property>
+                                        <property name="servletMappings">
+                                            <list>
+                                                <bean class="org.eclipse.jetty.servlet.ServletMapping">
+                                                    <property name="servletName"
+                                                              value="rest"/>
+                                                    <property name="pathSpecs">
+                                                        <list>
+                                                            <value>/v1/*</value>
+                                                        </list>
+                                                    </property>
+                                                </bean>
+                                            </list>
+                                        </property>
+                                    </bean>
+                                </property>
+                                <property name="attributes">
+                                    <bean class="org.dcache.util.jetty.ImmutableAttributesMap">
+                                        <constructor-arg>
+                                            <map>
+                                                <entry key="#{ T(org.dcache.restful.util.ServletContextHandlerAttributes).DL}"
+                                                       value-ref="list-handler"/>
+                                                <entry key="#{ T(org.dcache.restful.util.ServletContextHandlerAttributes).CS}"
+                                                       value-ref="pnfs-stub"/>
+                                                <entry key="#{ T(org.dcache.restful.util.ServletContextHandlerAttributes).PM}"
+                                                       value-ref="pool-monitor"/>
+
+                                            </map>
+                                        </constructor-arg>
+                                    </bean>
+                                </property>
+                            </bean>
+                            <bean class="org.dcache.webdav.RedirectToPortHandler">
+                                <property name="port" value="${webdav.net.port}"/>
+                            </bean>
+                        </list>
+                    </property>
+                </bean>
+            </property>
+            <property name="loginStrategy" ref="cache-login-strategy"/>
+            <property name="readOnly" value="${webdav.authz.readonly}"/>
+            <property name="enableBasicAuthentication" value="${webdav.authn.basic}"/>
+            <property name="realm" value="${webdav.authn.realm}"/>
+        </bean>
+    </beans>
+
+    <beans profile="api-false">
+        <bean id="api-handler" class="org.dcache.webdav.RedirectToPortHandler">
+            <property name="port" value="${webdav.net.port}"/>
         </bean>
     </beans>
 </beans>

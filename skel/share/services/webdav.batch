@@ -7,6 +7,7 @@ check -strong webdav.cell.name
 check webdav.cell.consume
 check webdav.cell.subscribe
 check -strong webdav.net.port
+check -strong webdav.net.static-port
 check -strong webdav.net.listen
 check -strong webdav.service.pnfsmanager
 check -strong webdav.service.pnfsmanager.timeout
@@ -115,7 +116,7 @@ exec env verify-${webdav.authn.profile}.exe
 onerror shutdown
 create org.dcache.cells.UniversalSpringCell ${webdav.cell.name} \
    "classpath:org/dcache/webdav/webdav.xml \
-    -profiles=connector-${webdav.authn.profile},missing-files-${webdav.enable.missing-files},owncloud-${webdav.enable.owncloud} \
+    -profiles=connector-${webdav.authn.profile},missing-files-${webdav.enable.missing-files},owncloud-${webdav.enable.owncloud},api-${webdav.enable.api} \
     -consume=${webdav.cell.consume} \
     -subscribe=${webdav.cell.subscribe} \
     -cellClass=WebDAVDoor"

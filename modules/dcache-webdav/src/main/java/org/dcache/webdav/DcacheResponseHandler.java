@@ -1,6 +1,7 @@
 package org.dcache.webdav;
 
 import com.google.common.base.Splitter;
+import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
@@ -17,6 +18,7 @@ import io.milton.http.webdav.PropFindResponse;
 import io.milton.http.webdav.PropFindResponse.NameAndError;
 import io.milton.resource.GetableResource;
 import io.milton.resource.Resource;
+import io.milton.servlet.ServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Required;
@@ -25,11 +27,13 @@ import org.stringtemplate.v4.STGroup;
 import org.stringtemplate.v4.STGroupFile;
 
 import javax.security.auth.Subject;
+import javax.servlet.http.HttpServletRequest;
 import javax.xml.namespace.QName;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.security.AccessController;
 import java.util.Iterator;
 import java.util.List;
@@ -71,6 +75,7 @@ public class DcacheResponseHandler extends AbstractWrappingResponseHandler
     private String _staticContentPath;
     private STGroup _templateGroup;
     private ImmutableMap<String, String> _templateConfig;
+    private int _staticContentPort;
 
     public void setAuthenticationService(AuthenticationService authenticationService)
     {
@@ -101,6 +106,12 @@ public class DcacheResponseHandler extends AbstractWrappingResponseHandler
     public void setTemplateConfig(ImmutableMap<String, String> config)
     {
         _templateConfig = config;
+    }
+
+    @Required
+    public void setStaticContentPort(int staticPort)
+    {
+        _staticContentPort = staticPort;
     }
 
     /**
@@ -185,30 +196,38 @@ public class DcacheResponseHandler extends AbstractWrappingResponseHandler
      */
     private String generateErrorPage(String path, Response.Status status)
     {
-        String[] base =
-            Iterables.toArray(PATH_SPLITTER.split(path), String.class);
+        try {
+            String[] base =
+                Iterables.toArray(PATH_SPLITTER.split(path), String.class);
 
-        ST template = _templateGroup.getInstanceOf(HTML_TEMPLATE_NAME);
+            ST template = _templateGroup.getInstanceOf(HTML_TEMPLATE_NAME);
 
-        if (template == null) {
-            log.error("template '{}' not found in templategroup: {}",
-                    HTML_TEMPLATE_NAME, _templateGroup.getFileName());
-            return templateNotFoundErrorPage(_templateGroup, HTML_TEMPLATE_NAME);
+            if (template == null) {
+                log.error("template '{}' not found in templategroup: {}",
+                        HTML_TEMPLATE_NAME, _templateGroup.getFileName());
+                return templateNotFoundErrorPage(_templateGroup, HTML_TEMPLATE_NAME);
+            }
+
+            HttpServletRequest servletRequest = ServletRequest.getRequest();
+            URI staticContentUri = new URI(servletRequest.getScheme(), null, servletRequest.getServerName(), _staticContentPort, _staticContentPath, null, null);
+
+            template.add("path", UrlPathWrapper.forPaths(base));
+            template.add("base", UrlPathWrapper.forEmptyPath());
+            template.add("static", staticContentUri);
+            template.add("errorcode", status.toString());
+            template.add("errormessage", ERRORS.get(status));
+            template.add("config", _templateConfig);
+
+            Subject subject = Subject.getSubject(AccessController.getContext());
+            if (subject != null) {
+                template.add("subject", subject.getPrincipals().toString());
+            }
+
+            return template.render();
+        } catch (URISyntaxException e) {
+            // Shouldn't be possible
+            throw Throwables.propagate(e);
         }
-
-        template.add("path", UrlPathWrapper.forPaths(base));
-        template.add("base", UrlPathWrapper.forEmptyPath());
-        template.add("static", _staticContentPath);
-        template.add("errorcode", status.toString());
-        template.add("errormessage", ERRORS.get(status));
-        template.add("config", _templateConfig);
-
-        Subject subject = Subject.getSubject(AccessController.getContext());
-        if (subject != null) {
-            template.add("subject", subject.getPrincipals().toString());
-        }
-
-        return template.render();
     }
 
     public static String templateNotFoundErrorPage(STGroup group, String template)

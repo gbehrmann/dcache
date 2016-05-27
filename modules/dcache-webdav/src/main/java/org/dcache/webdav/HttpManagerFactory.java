@@ -26,6 +26,7 @@ public class HttpManagerFactory extends HttpManagerBuilder implements FactoryBea
     private Resource _templateResource;
     private ImmutableMap<String,String> _templateConfig;
     private String _staticContentPath;
+    private int _staticContentPort;
 
     @Override
     public Object getObject() throws Exception
@@ -45,6 +46,7 @@ public class HttpManagerFactory extends HttpManagerBuilder implements FactoryBea
         dcacheResponseHandler.setTemplateResource(_templateResource);
         dcacheResponseHandler.setTemplateConfig(_templateConfig);
         dcacheResponseHandler.setStaticContentPath(_staticContentPath);
+        dcacheResponseHandler.setStaticContentPort(_staticContentPort);
         dcacheResponseHandler.setBuffering(getBuffering());
 
         return buildHttpManager();
@@ -144,5 +146,11 @@ public class HttpManagerFactory extends HttpManagerBuilder implements FactoryBea
     public void setStaticContentPath(String path)
     {
         _staticContentPath = path;
+    }
+
+    @Required
+    public void setStaticContentPort(int port)
+    {
+        _staticContentPort = port;
     }
 }
