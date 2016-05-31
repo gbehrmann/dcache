@@ -77,9 +77,13 @@ import org.springframework.beans.factory.annotation.Required;
 import org.springframework.dao.DataAccessException;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Formatter;
 import java.util.Map;
+import java.util.Set;
 import java.util.Timer;
+import java.util.TimerTask;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -99,11 +103,15 @@ import org.dcache.srm.v2_2.TStatusCode;
 import static com.google.common.base.Preconditions.*;
 import static com.google.common.base.Strings.padEnd;
 import static com.google.common.base.Strings.repeat;
+import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class Scheduler <T extends Job>
 {
     private static final Logger LOGGER =
             LoggerFactory.getLogger(Scheduler.class);
+
+    private static final Timer TIMER = new Timer("Job expiration", true);
+
     private final Class<T> type;
 
     private int maxRequests;
@@ -139,6 +147,8 @@ public class Scheduler <T extends Job>
     private String transferStrategyName;
 
     private Multimap<State,Long> jobs = MultimapBuilder.enumKeys(State.class).hashSetValues().build();
+
+    private final Set<Job> jobsToExpire = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     public static Scheduler<?> getScheduler(String id)
     {
@@ -187,6 +197,7 @@ public class Scheduler <T extends Job>
             running = true;
         }
         workSupplyService.startAsync().awaitRunning();
+        TIMER.schedule(new ExpirationTask(), SECONDS.toMillis(60), SECONDS.toMillis(60));
     }
 
     public void stop()
@@ -454,8 +465,11 @@ public class Scheduler <T extends Job>
 
         synchronized (this) {
             jobs.remove(oldState, job.getId());
-            if (!newState.isFinal()) {
+            if (newState.isFinal()) {
+                jobsToExpire.remove(job);
+            } else {
                 jobs.put(newState, job.getId());
+                jobsToExpire.add(job);
             }
         }
 
@@ -628,6 +642,22 @@ public class Scheduler <T extends Job>
         }
         if (!id.equals(job.getSchedulerId()) || timeStamp != job.getSchedulerTimeStamp()) {
             throw new IllegalArgumentException("Job " + job.getId() + " doesn't belong to scheduler " + getId() + '.');
+        }
+    }
+
+    private class ExpirationTask extends TimerTask
+    {
+        @Override
+        public void run()
+        {
+            for (Job job : jobsToExpire) {
+                try {
+                    job.checkExpiration();
+                } catch (RuntimeException e) {
+                    Thread thread = Thread.currentThread();
+                    thread.getUncaughtExceptionHandler().uncaughtException(thread, e);
+                }
+            }
         }
     }
 }
